@@ -1,0 +1,26 @@
+target/
+
+# logs
+
+*.log
+
+# IntelliJ
+
+.idea/
+*.iml
+out/
+
+# Eclipse / STS
+
+.project
+.classpath
+.settings/
+
+# VS Code
+
+.vscode/
+
+# OS files
+
+.DS_Store
+Thumbs.db
