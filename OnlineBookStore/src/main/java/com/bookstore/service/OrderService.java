@@ -12,6 +12,7 @@ import com.bookstore.dto.request.OrderRequest;
 import com.bookstore.dto.response.OrderItemResponse;
 import com.bookstore.dto.response.OrderResponse;
 import com.bookstore.exception.BookNotFoundException;
+import com.bookstore.exception.InsufficientStockException;
 import com.bookstore.exception.OrderNotFoundException;
 import com.bookstore.exception.UserNotFoundException;
 import com.bookstore.model.Book;
@@ -22,6 +23,8 @@ import com.bookstore.model.User;
 import com.bookstore.repository.BookRepository;
 import com.bookstore.repository.OrderRepository;
 import com.bookstore.repository.UserRepository;
+
+import jakarta.transaction.Transactional;
 
 @Service
 public class OrderService {
@@ -61,6 +64,7 @@ public class OrderService {
 	}
 	
 	//method to create order
+	@Transactional
 	public OrderResponse createOrder(Long userId, OrderRequest request) {
 		
 		//1- Fetch User
@@ -82,6 +86,15 @@ public class OrderService {
 			
 			Book book=bookRepository.findById(itemRequest.getBookId())
 					.orElseThrow(()->new BookNotFoundException(itemRequest.getBookId()));
+			
+			if(book.getStock()<itemRequest.getQuantity()) {
+				throw new InsufficientStockException(
+                        "Insufficient stock for book: " + book.getTitle() +
+                        ". Available stock: " + book.getStock() +
+                        ", Requested quantity: " + itemRequest.getQuantity()
+                );
+			}
+			
 			
 			OrderItem item=OrderItem.builder()
 					.book(book)
