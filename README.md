@@ -77,11 +77,3 @@ With @Transactional:
 | `GlobalExceptionHandler.java` | Handler for `InsufficientStockException` |
 
 ---
-
-### Git
-```bash
-git checkout -b feature/UC2-StockManagement
-git add .
-git commit -m "feat: UC2 - stock validation, deduction on order and restoration on cancellation"
-git push -u origin feature/UC2-StockManagement
-```
