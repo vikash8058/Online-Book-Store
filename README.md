@@ -1,150 +1,238 @@
-## UC5 — Spring Security Phase 1 (Basic Authentication)
+## UC6 — Session Based Security (Spring Security Phase 1)
 
 ### What Was Added
 - Spring Security dependency
-- `SecurityConfig.java` — defines public and protected endpoints
+- `SecurityConfig.java` — public and protected endpoints + session management
 - `CustomUserDetailsService.java` — loads user from DB for Spring Security
+- `AuthController.java` — login, logout, current user endpoints
+- `LoginRequest.java` — DTO for login request
+- `LoginResponse.java` — DTO for login response
 - BCrypt password encoding on user registration
-- HTTP Basic Authentication
-- Plain text password never stored in DB
+- Session based authentication — login once, session stored on server
 
 ---
 
 ## Core Concepts
 
-### What is Spring Security
+### What is Authentication vs Authorization
 ```
-Spring Security is a framework that handles:
-→ Authentication  — who are you? (login)
-→ Authorization   — what can you do? (permissions)
+Authentication → WHO are you? (login)
+Authorization  → WHAT can you do? (permissions)
 
-Without Security:
-Anyone can call any endpoint without login ❌
+UC6 covers Authentication only
+Role based Authorization comes in JWT phase
+```
 
-With Security:
-Public endpoints  → anyone can access ✅
-Protected endpoints → only logged in users ✅
+### What is Session Based Security
+```
+Step 1 — Register
+→ User registers with email + BCrypt password
+→ Password never stored as plain text
+
+Step 2 — Login
+→ User sends email + password
+→ Spring Security verifies credentials
+→ Server creates a SESSION
+→ Returns JSESSIONID cookie to client
+
+Step 3 — Protected Request
+→ Client sends JSESSIONID cookie automatically
+→ Server checks session → valid → request proceeds
+
+Step 4 — Logout
+→ Server destroys session
+→ JSESSIONID becomes invalid
+→ Next request → 401 Unauthorized
 ```
 
 ### What is BCrypt
 ```
-BCrypt is a password hashing algorithm
+Plain password  → "secure123"
+        ↓
+BCryptPasswordEncoder.encode()
+        ↓
+Stored in DB    → "$2a$10$xyzxyzxyz..."
 
-Without BCrypt:
-password "secure123" stored as "secure123" in DB ❌
-if DB is hacked → all passwords exposed ❌
-
-With BCrypt:
-password "secure123" stored as "$2a$10$xyz..." in DB ✅
-if DB is hacked → passwords are safe ✅
-BCrypt is one way — cannot be decoded back ✅
-```
-
-### What is HTTP Basic Auth
-```
-Client sends credentials with every request
-Authorization: Basic base64(email:password)
-
-Simple and easy to test in Postman
-Not recommended for production (use JWT instead)
-Good for Phase 1 learning ✅
+If DB is hacked → passwords are safe ✅
+BCrypt is one way → cannot be decoded ✅
 ```
 
 ---
 
-## How It Works
-
-### Registration Flow
+## How Authentication Works Internally
 ```
-POST /api/users/register
+POST /api/auth/login
+Body: { "email": "john@example.com", "password": "secure123" }
         ↓
-UserService.registerUser()
+AuthenticationManager.authenticate()
         ↓
-Check duplicate email
+DaoAuthenticationProvider
         ↓
-BCryptPasswordEncoder.encode("secure123")
-→ "$2a$10$xyzxyzxyz..."
+CustomUserDetailsService.loadUserByUsername(email)
         ↓
-Save encoded password in DB ✅
-Plain text password never stored ✅
-```
-
-### Login / Authentication Flow
-```
-Client sends request with credentials
-Authorization: Basic am9obkBleGFtcGxlLmNvbTpzZWN1cmUxMjM=
-        ↓
-Spring Security intercepts request
-        ↓
-Calls CustomUserDetailsService.loadUserByUsername(email)
-        ↓
-Fetches user from DB by email
+Fetches User from DB by email
         ↓
 BCryptPasswordEncoder.matches(rawPassword, encodedPassword)
         ↓
-match    → request proceeds ✅  200 OK
-no match → request blocked  ❌  401 Unauthorized
+match    → Authentication success ✅
+no match → BadCredentialsException ❌ → 401 Unauthorized
 ```
 
-### Password Encoding Flow
-```
-Register:
-plain password → "secure123"
-        ↓
-BCryptPasswordEncoder.encode()
-        ↓
-stored in DB → "$2a$10$xyzxyzxyz..."  ✅
+---
 
-Login:
-client sends → "secure123"
-        ↓
-BCryptPasswordEncoder.matches()
-compares with → "$2a$10$xyzxyzxyz..."
-        ↓
-match → login success ✅
-```
+## New Endpoints Added
+
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | Login with email and password | No |
+| `POST` | `/api/auth/logout` | Logout and destroy session | Yes |
+| `GET` | `/api/auth/me` | Get current logged in user info | Yes |
 
 ---
 
 ## Public vs Protected Endpoints
 ```
 PUBLIC — no login required:
-✅ POST /api/users/register     → anyone can register
-✅ GET  /api/books              → anyone can view all books
-✅ GET  /api/books/**           → anyone can view book, search
+✅ POST /api/auth/login          → login
+✅ POST /api/users/register      → register
+✅ GET  /api/books/get/**        → view books
+✅ GET  /api/books/search        → search books
 
 PROTECTED — login required:
-🔒 POST   /api/orders/{userId}  → must be logged in
-🔒 GET    /api/orders           → must be logged in
-🔒 GET    /api/orders/{id}      → must be logged in
-🔒 DELETE /api/orders/{id}      → must be logged in
-🔒 GET    /api/users            → must be logged in
-🔒 GET    /api/users/{id}       → must be logged in
-🔒 DELETE /api/users/{id}       → must be logged in
-🔒 POST   /api/books            → must be logged in
-🔒 PUT    /api/books/{id}       → must be logged in
-🔒 PATCH  /api/books/{id}       → must be logged in
-🔒 DELETE /api/books/{id}       → must be logged in
+🔒 POST   /api/orders/{userId}   → create order
+🔒 GET    /api/orders            → get all orders
+🔒 GET    /api/orders/{id}       → get order by id
+🔒 DELETE /api/orders/{id}       → delete order
+🔒 PATCH  /api/orders/{id}/status → update order status
+🔒 GET    /api/users             → get all users
+🔒 GET    /api/users/{id}        → get user by id
+🔒 DELETE /api/users/{id}        → delete user
+🔒 POST   /api/books             → create book
+🔒 PUT    /api/books/{id}        → full update book
+🔒 PATCH  /api/books/{id}        → partial update book
+🔒 DELETE /api/books/{id}        → delete book
+🔒 GET    /api/auth/me           → current user info
+🔒 POST   /api/auth/logout       → logout
 ```
 
 ---
 
-## New Files Added
+## Sample Requests and Responses
 
-### SecurityConfig.java
+### Register User
 ```
-→ Disables CSRF (not needed for REST APIs)
-→ Defines public and protected endpoints
-→ Sets up HTTP Basic authentication
-→ Creates BCryptPasswordEncoder bean
+POST http://localhost:8080/api/users/register
+Body:
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "secure123"
+}
+
+Response 201 Created:
+{
+  "id": 1,
+  "name": "John Doe",
+  "email": "john@example.com",
+  "role": "CUSTOMER"
+}
 ```
 
-### CustomUserDetailsService.java
+---
+
+### Login — Success
 ```
-→ Implements UserDetailsService interface
-→ Spring Security calls this during login
-→ Loads user from DB by email
-→ Returns UserDetails object to Spring Security
+POST http://localhost:8080/api/auth/login
+Body:
+{
+  "email": "john@example.com",
+  "password": "secure123"
+}
+
+Response 200 OK:
+{
+  "message": "Login successful",
+  "email": "john@example.com",
+  "role": "ROLE_CUSTOMER"
+}
+Cookie set automatically: JSESSIONID=abc123xyz
+```
+
+---
+
+### Login — Wrong Credentials
+```
+POST http://localhost:8080/api/auth/login
+Body:
+{
+  "email": "john@example.com",
+  "password": "wrongpassword"
+}
+
+Response 401 Unauthorized:
+{
+  "message": "Invalid email or password",
+  "email": "john@example.com",
+  "role": "CUSTOMER"
+}
+```
+
+---
+
+### Get Current Logged In User
+```
+GET http://localhost:8080/api/auth/me
+(JSESSIONID cookie sent automatically)
+
+Response 200 OK:
+{
+  "message": "Currently logged in",
+  "email": "john@example.com",
+  "role": "ROLE_CUSTOMER"
+}
+```
+
+---
+
+### Get Current User — Not Logged In
+```
+GET http://localhost:8080/api/auth/me
+(no session)
+
+Response 401 Unauthorized:
+{
+  "message": "Not logged in"
+}
+```
+
+---
+
+### Logout
+```
+POST http://localhost:8080/api/auth/logout
+
+Response 200 OK:
+"Logged out successfully"
+```
+
+---
+
+### Access Protected Endpoint Without Login
+```
+GET http://localhost:8080/api/orders
+
+Response 401 Unauthorized
+```
+
+---
+
+### Access Protected Endpoint With Login
+```
+GET http://localhost:8080/api/orders
+(JSESSIONID cookie sent automatically)
+
+Response 200 OK:
+[...]
 ```
 
 ---
@@ -154,141 +242,81 @@ PROTECTED — login required:
 | File | Type | Change |
 |---|---|---|
 | `pom.xml` | Modified | Added Spring Security dependency |
-| `SecurityConfig.java` | New | Security rules + BCrypt bean |
-| `CustomUserDetailsService.java` | New | Load user from DB for Spring Security |
-| `UserService.java` | Modified | Encode password before saving |
+| `SecurityConfig.java` | New | Security rules, session management, BCrypt bean |
+| `CustomUserDetailsService.java` | New | Loads user from DB for Spring Security |
+| `AuthController.java` | New | Login, logout, current user endpoints |
+| `LoginRequest.java` | New | DTO for login request |
+| `LoginResponse.java` | New | DTO for login response |
+| `UserService.java` | Modified | Encode password with BCrypt before saving |
 
 ---
 
-## Postman Testing — UC5
+## Postman Testing — UC6
 
-### Setup for Protected Endpoints
+### Important Postman Setup
 ```
-Postman → Authorization tab
-Type     : Basic Auth
-Username : john@example.com
-Password : secure123
-```
-
----
-
-### Test 1 — Register User (Public)
-```
-POST http://localhost:8080/api/users/register
-Body:
-{
-  "name": "John Doe",
-  "email": "john@example.com",
-  "password": "secure123"
-}
-Expected : 201 Created
-Auth     : not required ✅
+Postman → Settings → Cookies → Enable
+Postman will automatically store and send JSESSIONID cookie
+No manual work needed ✅
 ```
 
 ---
 
-### Test 2 — Get All Books (Public)
-```
-GET http://localhost:8080/api/books
-Expected : 200 OK
-Auth     : not required ✅
-```
-
----
-
-### Test 3 — Create Order Without Login
-```
-POST http://localhost:8080/api/orders/1
-Body: { "items": [{ "bookId": 1, "quantity": 1 }] }
-Expected : 401 Unauthorized ❌
-Auth     : none
-```
-
----
-
-### Test 4 — Create Order With Login
-```
-POST http://localhost:8080/api/orders/1
-Body: { "items": [{ "bookId": 1, "quantity": 1 }] }
-Auth     : Basic Auth → john@example.com / secure123
-Expected : 201 Created ✅
-```
-
----
-
-### Test 5 — Wrong Password
-```
-POST http://localhost:8080/api/orders/1
-Auth     : Basic Auth → john@example.com / wrongpassword
-Expected : 401 Unauthorized ❌
-```
-
----
-
-### Test 6 — Get All Users Without Login
-```
-GET http://localhost:8080/api/users
-Expected : 401 Unauthorized ❌
-Auth     : none
-```
-
----
-
-### Test 7 — Get All Users With Login
-```
-GET http://localhost:8080/api/users
-Auth     : Basic Auth → john@example.com / secure123
-Expected : 200 OK ✅
-```
-
----
-
-### Test 8 — Duplicate Email
-```
-POST http://localhost:8080/api/users/register
-Body:
-{
-  "name": "John Doe",
-  "email": "john@example.com",
-  "password": "secure123"
-}
-(same email registered again)
-Expected : 409 Conflict ❌
-Response :
-{
-  "message": "Email already registered: john@example.com",
-  "statusCode": 409,
-  "timestamp": "2024-01-15T10:30:00"
-}
-```
-
----
-
-## Complete Testing Checklist — UC5
+### Complete Testing Checklist
 ```
 REGISTRATION
-□ POST /api/users/register (new email)     → 201 Created
-□ POST /api/users/register (same email)    → 409 Conflict
-□ check DB → password stored as BCrypt hash not plain text
+□ POST /api/users/register (new user)       → 201 Created
+□ POST /api/users/register (same email)     → 409 Conflict
+□ check DB → password stored as BCrypt hash ✅
 
-PUBLIC ENDPOINTS
-□ GET /api/books (no auth)                 → 200 OK
-□ GET /api/books/1 (no auth)               → 200 OK
+LOGIN
+□ POST /api/auth/login (correct credentials) → 200 OK + JSESSIONID cookie
+□ POST /api/auth/login (wrong password)      → 401 Unauthorized
+□ POST /api/auth/login (wrong email)         → 401 Unauthorized
+
+PUBLIC ENDPOINTS (no login needed)
+□ GET /api/books/get/1   (no session) → 200 OK ✅
+□ GET /api/books/search  (no session) → 200 OK ✅
 
 PROTECTED WITHOUT LOGIN
-□ POST   /api/orders/1 (no auth)           → 401 Unauthorized
-□ GET    /api/orders   (no auth)           → 401 Unauthorized
-□ GET    /api/users    (no auth)           → 401 Unauthorized
-□ POST   /api/books    (no auth)           → 401 Unauthorized
-□ DELETE /api/books/1  (no auth)           → 401 Unauthorized
+□ GET    /api/orders     (no session) → 401 Unauthorized ❌
+□ GET    /api/users      (no session) → 401 Unauthorized ❌
+□ POST   /api/books      (no session) → 401 Unauthorized ❌
+□ DELETE /api/books/1    (no session) → 401 Unauthorized ❌
 
-PROTECTED WITH CORRECT LOGIN
-□ POST   /api/orders/1 (correct auth)      → 201 Created
-□ GET    /api/orders   (correct auth)      → 200 OK
-□ GET    /api/users    (correct auth)      → 200 OK
+PROTECTED WITH LOGIN
+□ GET    /api/orders     (with session) → 200 OK ✅
+□ GET    /api/users      (with session) → 200 OK ✅
+□ POST   /api/books      (with session) → 201 Created ✅
+□ DELETE /api/books/1    (with session) → 204 No Content ✅
 
-PROTECTED WITH WRONG PASSWORD
-□ POST /api/orders/1 (wrong password)      → 401 Unauthorized
-□ GET  /api/users    (wrong password)      → 401 Unauthorized
+CURRENT USER
+□ GET /api/auth/me (with session)    → 200 OK + user info ✅
+□ GET /api/auth/me (without session) → 401 Not logged in ❌
+
+LOGOUT
+□ POST /api/auth/logout (with session)   → 200 OK ✅
+□ GET  /api/orders (after logout)        → 401 Unauthorized ❌
 ```
+
+---
+
+## Session vs JWT — Why We Will Move to JWT Next
+```
+Session Based (UC6 — current):
+→ Session stored on SERVER
+→ Every request hits server to check session
+→ Hard to scale (multiple servers = session sharing problem)
+→ Not ideal for mobile apps and REST APIs
+→ Good for learning and understanding ✅
+
+JWT Based (UC7 — next):
+→ Token stored on CLIENT
+→ Server is STATELESS — no session storage
+→ Easy to scale
+→ Works perfectly for REST APIs and mobile apps
+→ Token contains user info + expiry
+→ Production ready ✅
+```
+
 ---
