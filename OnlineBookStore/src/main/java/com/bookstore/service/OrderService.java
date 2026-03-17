@@ -95,6 +95,8 @@ public class OrderService {
                 );
 			}
 			
+			book.setStock(book.getStock()-itemRequest.getQuantity());
+			bookRepository.save(book);
 			
 			OrderItem item=OrderItem.builder()
 					.book(book)
