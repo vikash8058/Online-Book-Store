@@ -9,10 +9,12 @@ import org.springframework.stereotype.Service;
 
 import com.bookstore.dto.request.OrderItemRequest;
 import com.bookstore.dto.request.OrderRequest;
+import com.bookstore.dto.request.OrderStatusUpdateRequest;
 import com.bookstore.dto.response.OrderItemResponse;
 import com.bookstore.dto.response.OrderResponse;
 import com.bookstore.exception.BookNotFoundException;
 import com.bookstore.exception.InsufficientStockException;
+import com.bookstore.exception.InvalidOrderStatusException;
 import com.bookstore.exception.OrderNotFoundException;
 import com.bookstore.exception.UserNotFoundException;
 import com.bookstore.model.Book;
@@ -138,5 +140,62 @@ public class OrderService {
 		}
 		
 		orderRepository.deleteById(id);
+	}
+	
+	//method to update status or order
+	@Transactional
+	public OrderResponse updateOrderStatus(Long id, OrderStatusUpdateRequest request) {
+		
+		//1- fetch order
+		Order order=orderRepository.findById(id)
+				.orElseThrow(() -> new OrderNotFoundException(id));
+		
+		//2- validate status transition
+		validateStatusTransition(order.getStatus(), request.getStatus());
+		
+		//3- if cancelling, restore stock of each book
+		if(request.getStatus() == OrderStatus.CANCELLED) {
+			for(OrderItem item:order.getOrderItems()) {
+				Book book=item.getBook();
+				book.setStock(book.getStock()+item.getQuantity());
+				bookRepository.save(book);
+			}
+		}
+		
+		
+		// 4. update status
+		order.setStatus(request.getStatus());
+		
+		// 5. save and return
+		return toResponse(orderRepository.save(order));
+		
+		
+	}
+	
+	private void validateStatusTransition(OrderStatus current, OrderStatus next) {
+		
+		if(current==OrderStatus.CANCELLED) {
+			throw new InvalidOrderStatusException("Cannot update status of a CANCELLED order");
+		}
+		
+		if (current == OrderStatus.DELIVERED) {
+			throw new InvalidOrderStatusException("Cannot update status of a DELIVERED order");
+		}
+		
+		if(next==OrderStatus.PENDING) {
+			throw new InvalidOrderStatusException("Cannot move order back to PENDING");
+		}
+	}
+	
+	//method to get Order by userId
+	public List<OrderResponse> getOrdersByUser(Long userId){
+		if(userRepository.existsById(userId)) {
+			throw new UserNotFoundException(userId);
+		}
+		
+		return orderRepository.findById(userId)
+				.stream()
+				.map(this::toResponse)
+				.toList();
 	}
 }

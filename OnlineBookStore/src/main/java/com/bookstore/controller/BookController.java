@@ -66,5 +66,10 @@ public class BookController {
 	public ResponseEntity<List<BookResponse>> searchByTitle(@RequestParam String title) {
 		return ResponseEntity.ok(bookService.searchBookByTitle(title));
 	}
+	
+	@GetMapping("/author")
+	public ResponseEntity<List<BookResponse>> searchByAuthor(@RequestParam String authorName) {
+	    return ResponseEntity.ok(bookService.searchBookByAuthor(authorName));
+	}
 
 }

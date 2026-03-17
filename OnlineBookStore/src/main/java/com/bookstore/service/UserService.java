@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import com.bookstore.dto.request.UserRegisterRequest;
 import com.bookstore.dto.request.UserUpdateRequest;
 import com.bookstore.dto.response.UserResponse;
+import com.bookstore.exception.DuplicateEmailException;
 import com.bookstore.exception.UserNotFoundException;
 import com.bookstore.model.Role;
 import com.bookstore.model.User;
@@ -31,6 +32,12 @@ public class UserService {
 
 	//method to register user
 	public UserResponse registerUser(UserRegisterRequest request) {
+		
+		//check if email already exist
+		if(userRepository.findByEmail(request.getEmail()).isPresent()) {
+			throw new DuplicateEmailException("Email already registered: " + request.getEmail());
+		}
+		
 		User user=User.builder()
 				.name(request.getName())
 				.email(request.getEmail())

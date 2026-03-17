@@ -112,4 +112,11 @@ public class BookService {
 				.map(this::toResponse)
 				.toList();	
 	}
+	
+	public List<BookResponse> searchBookByAuthor(String authorName) {
+	    return bookRepository.findByAuthorName(authorName)
+	            .stream()
+	            .map(this::toResponse)
+	            .toList();
+	}
 }
