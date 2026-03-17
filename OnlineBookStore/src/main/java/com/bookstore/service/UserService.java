@@ -3,6 +3,7 @@ package com.bookstore.service;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.bookstore.dto.request.UserRegisterRequest;
 import com.bookstore.dto.request.UserUpdateRequest;
@@ -18,6 +19,8 @@ public class UserService {
 	
 	@Autowired
 	private UserRepository userRepository;
+	@Autowired
+	private PasswordEncoder passwordEncoder;
 	
 	//helper method that convert entity -> dto
 	public UserResponse toResponse(User user) {
@@ -41,7 +44,7 @@ public class UserService {
 		User user=User.builder()
 				.name(request.getName())
 				.email(request.getEmail())
-				.password(request.getPassword())
+				.password(passwordEncoder.encode(request.getPassword()))
 				.role(Role.CUSTOMER)
 				.build();
 		
