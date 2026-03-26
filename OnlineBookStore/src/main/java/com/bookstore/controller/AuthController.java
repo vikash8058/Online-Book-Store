@@ -69,6 +69,11 @@ public class AuthController {
 				
 		//get authenticated user
 		User user=(User) authentication.getPrincipal();
+		/*
+		 * authentication.getPrincipal() → returns the UserDetails object that was
+		 * loaded by CustomUserDetailsService we cast to User because we know it is our
+		 * User entity now we have access to user.getEmail(), user.getRole() etc
+		 */
 		
 		// generate token
 		String token=jwtService.generateToken(user);
