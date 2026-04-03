@@ -1,322 +1,149 @@
-## UC6 — Session Based Security (Spring Security Phase 1)
+# UC7 — JWT Based Security
 
-### What Was Added
-- Spring Security dependency
-- `SecurityConfig.java` — public and protected endpoints + session management
-- `CustomUserDetailsService.java` — loads user from DB for Spring Security
-- `AuthController.java` — login, logout, current user endpoints
-- `LoginRequest.java` — DTO for login request
-- `LoginResponse.java` — DTO for login response
-- BCrypt password encoding on user registration
-- Session based authentication — login once, session stored on server
+## Overview
+UC7 replaces session based security (UC6) with stateless JWT
+(JSON Web Token) based authentication. Every protected endpoint
+now requires a valid Bearer token in the Authorization header.
 
----
+## Tech Used
+- Spring Boot 3.2.0
+- Spring Security 6.2.0
+- jjwt 0.12.3 (JSON Web Token library)
+- BCryptPasswordEncoder
+- MySQL
+- Lombok
 
-## Core Concepts
+## What changed from UC6
+| UC6 (Session) | UC7 (JWT) |
+|---|---|
+| Server stores session in memory | Server stores nothing — stateless |
+| Cookie based auth | Bearer token in Authorization header |
+| /login returns session | /login returns JWT token |
+| Sessions expire server side | Token expires via exp claim |
 
-### What is Authentication vs Authorization
-```
-Authentication → WHO are you? (login)
-Authorization  → WHAT can you do? (permissions)
+## New Files
+| File | Purpose |
+|---|---|
+| `filter/JwtAuthFilter.java` | Intercepts every request, validates JWT |
+| `service/JwtService.java` | Generate, validate, extract claims from token |
+| `dto/request/LoginRequest.java` | Request DTO for /auth/login |
+| `dto/response/AuthResponse.java` | Response DTO — returns JWT token |
 
-UC6 covers Authentication only
-Role based Authorization comes in JWT phase
-```
+## Modified Files
+| File | What changed |
+|---|---|
+| `model/User.java` | Implements UserDetails — Spring Security uses it directly |
+| `service/CustomUserDetailsService.java` | Returns User directly instead of Spring's User builder |
+| `controller/AuthController.java` | /register returns message, /login returns JWT token |
+| `controller/UserController.java` | Removed /register endpoint — moved to AuthController |
+| `service/UserService.java` | Removed registerUser() method |
+| `config/SecurityConfig.java` | Full rewrite — JWT filter chain, STATELESS, endpoint rules |
+| `application.properties` | Added jwt.secret and jwt.expiration |
+| `pom.xml` | Added jjwt-api, jjwt-impl, jjwt-jackson dependencies |
 
-### What is Session Based Security
-```
-Step 1 — Register
-→ User registers with email + BCrypt password
-→ Password never stored as plain text
-
-Step 2 — Login
-→ User sends email + password
-→ Spring Security verifies credentials
-→ Server creates a SESSION
-→ Returns JSESSIONID cookie to client
-
-Step 3 — Protected Request
-→ Client sends JSESSIONID cookie automatically
-→ Server checks session → valid → request proceeds
-
-Step 4 — Logout
-→ Server destroys session
-→ JSESSIONID becomes invalid
-→ Next request → 401 Unauthorized
-```
-
-### What is BCrypt
-```
-Plain password  → "secure123"
-        ↓
-BCryptPasswordEncoder.encode()
-        ↓
-Stored in DB    → "$2a$10$xyzxyzxyz..."
-
-If DB is hacked → passwords are safe ✅
-BCrypt is one way → cannot be decoded ✅
+## JWT Configuration
+```properties
+jwt.secret=5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437
+jwt.expiration=86400000
+# expiration = 86400000ms = 24 hours
 ```
 
----
-
-## How Authentication Works Internally
-```
-POST /api/auth/login
-Body: { "email": "john@example.com", "password": "secure123" }
-        ↓
-AuthenticationManager.authenticate()
-        ↓
-DaoAuthenticationProvider
-        ↓
-CustomUserDetailsService.loadUserByUsername(email)
-        ↓
-Fetches User from DB by email
-        ↓
-BCryptPasswordEncoder.matches(rawPassword, encodedPassword)
-        ↓
-match    → Authentication success ✅
-no match → BadCredentialsException ❌ → 401 Unauthorized
+## Admin Setup
+Admin user is inserted directly into MySQL via data.sql on startup.
+Nobody can register as ADMIN via API — registration always creates CUSTOMER.
+```sql
+INSERT INTO users (name, email, password, role)
+VALUES (
+    'Admin',
+    'admin2026@bookstore.com',
+    '$2a$10$UyVBg8YTlj/XzlUgFUh5Ou/uudQrOLZyPq.ur787xxwQnjxuKzuBC',
+    'ADMIN'
+);
 ```
 
----
-
-## New Endpoints Added
-
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/api/auth/login` | Login with email and password | No |
-| `POST` | `/api/auth/logout` | Logout and destroy session | Yes |
-| `GET` | `/api/auth/me` | Get current logged in user info | Yes |
-
----
-
-## Public vs Protected Endpoints
+Admin credentials:
 ```
-PUBLIC — no login required:
-✅ POST /api/auth/login          → login
-✅ POST /api/users/register      → register
-✅ GET  /api/books/get/**        → view books
-✅ GET  /api/books/search        → search books
-
-PROTECTED — login required:
-🔒 POST   /api/orders/{userId}   → create order
-🔒 GET    /api/orders            → get all orders
-🔒 GET    /api/orders/{id}       → get order by id
-🔒 DELETE /api/orders/{id}       → delete order
-🔒 PATCH  /api/orders/{id}/status → update order status
-🔒 GET    /api/users             → get all users
-🔒 GET    /api/users/{id}        → get user by id
-🔒 DELETE /api/users/{id}        → delete user
-🔒 POST   /api/books             → create book
-🔒 PUT    /api/books/{id}        → full update book
-🔒 PATCH  /api/books/{id}        → partial update book
-🔒 DELETE /api/books/{id}        → delete book
-🔒 GET    /api/auth/me           → current user info
-🔒 POST   /api/auth/logout       → logout
+email    : admin2026@bookstore.com
+password : Admin2026@
 ```
 
----
+## API Endpoints
 
-## Sample Requests and Responses
-
-### Register User
-```
-POST http://localhost:8080/api/users/register
-Body:
+### POST /auth/register (public)
+Request:
+```json
 {
-  "name": "John Doe",
-  "email": "john@example.com",
-  "password": "secure123"
+    "name"     : "Vikash",
+    "email"    : "vikash@gmail.com",
+    "password" : "Vikash123@"
 }
+```
+Response (200 OK):
+```
+"User registered successfully. Please login to get your token."
+```
 
-Response 201 Created:
+### POST /auth/login (public)
+Request:
+```json
 {
-  "id": 1,
-  "name": "John Doe",
-  "email": "john@example.com",
-  "role": "CUSTOMER"
+    "email"    : "vikash@gmail.com",
+    "password" : "Vikash123@"
+}
+```
+Response (200 OK):
+```json
+{
+    "token": "eyJhbGciOiJIUzI1NiJ9.xxxxx"
 }
 ```
 
----
+## Endpoint Security Rules
+| Endpoint | Access |
+|---|---|
+| POST /auth/register | Public |
+| POST /auth/login | Public |
+| GET /api/books/get/** | ADMIN + CUSTOMER |
+| GET /api/books/search | ADMIN + CUSTOMER |
+| GET /api/books/author | ADMIN + CUSTOMER |
+| POST /api/books/create | ADMIN only |
+| PUT /api/books/update/** | ADMIN only |
+| PATCH /api/books/partialUpdate/** | ADMIN only |
+| DELETE /api/books/delete/** | ADMIN only |
+| POST /api/orders/create/** | CUSTOMER only |
+| GET /api/orders/get | ADMIN only |
+| GET /api/orders/get/** | ADMIN + CUSTOMER |
+| GET /api/orders/user/** | ADMIN + CUSTOMER |
+| PATCH /api/orders/status/** | ADMIN only |
+| DELETE /api/orders/delete/** | ADMIN only |
+| GET /api/users/** | ADMIN only |
 
-### Login — Success
+## How to use JWT token in Postman
 ```
-POST http://localhost:8080/api/auth/login
-Body:
-{
-  "email": "john@example.com",
-  "password": "secure123"
-}
-
-Response 200 OK:
-{
-  "message": "Login successful",
-  "email": "john@example.com",
-  "role": "ROLE_CUSTOMER"
-}
-Cookie set automatically: JSESSIONID=abc123xyz
-```
-
----
-
-### Login — Wrong Credentials
-```
-POST http://localhost:8080/api/auth/login
-Body:
-{
-  "email": "john@example.com",
-  "password": "wrongpassword"
-}
-
-Response 401 Unauthorized:
-{
-  "message": "Invalid email or password",
-  "email": "john@example.com",
-  "role": "CUSTOMER"
-}
+Authorization tab
+→ Type: Bearer Token
+→ Token: paste token here (no quotes, no spaces)
 ```
 
----
-
-### Get Current Logged In User
+## Token Structure
 ```
-GET http://localhost:8080/api/auth/me
-(JSESSIONID cookie sent automatically)
-
-Response 200 OK:
-{
-  "message": "Currently logged in",
-  "email": "john@example.com",
-  "role": "ROLE_CUSTOMER"
-}
+eyJhbGciOiJIUzI1NiJ9          ← Header (algorithm)
+.eyJzdWIiOiJ2aWthc2gifQ        ← Payload (sub, iat, exp)
+.SflKxwRJSMeKKF2QT4fwpMeJf    ← Signature (HMACSHA256)
 ```
 
----
+## Error Responses
+| Scenario | Status |
+|---|---|
+| No token | 401 Unauthorized |
+| Expired token | 401 Unauthorized |
+| Tampered token | 401 Unauthorized |
+| Wrong role | 403 Forbidden |
+| Duplicate email | 409 Conflict |
+| Wrong password | 401 Unauthorized |
 
-### Get Current User — Not Logged In
-```
-GET http://localhost:8080/api/auth/me
-(no session)
+## Previous UC
+UC6 — Session Based Security
 
-Response 401 Unauthorized:
-{
-  "message": "Not logged in"
-}
-```
-
----
-
-### Logout
-```
-POST http://localhost:8080/api/auth/logout
-
-Response 200 OK:
-"Logged out successfully"
-```
-
----
-
-### Access Protected Endpoint Without Login
-```
-GET http://localhost:8080/api/orders
-
-Response 401 Unauthorized
-```
-
----
-
-### Access Protected Endpoint With Login
-```
-GET http://localhost:8080/api/orders
-(JSESSIONID cookie sent automatically)
-
-Response 200 OK:
-[...]
-```
-
----
-
-## Files Changed Summary
-
-| File | Type | Change |
-|---|---|---|
-| `pom.xml` | Modified | Added Spring Security dependency |
-| `SecurityConfig.java` | New | Security rules, session management, BCrypt bean |
-| `CustomUserDetailsService.java` | New | Loads user from DB for Spring Security |
-| `AuthController.java` | New | Login, logout, current user endpoints |
-| `LoginRequest.java` | New | DTO for login request |
-| `LoginResponse.java` | New | DTO for login response |
-| `UserService.java` | Modified | Encode password with BCrypt before saving |
-
----
-
-## Postman Testing — UC6
-
-### Important Postman Setup
-```
-Postman → Settings → Cookies → Enable
-Postman will automatically store and send JSESSIONID cookie
-No manual work needed ✅
-```
-
----
-
-### Complete Testing Checklist
-```
-REGISTRATION
-□ POST /api/users/register (new user)       → 201 Created
-□ POST /api/users/register (same email)     → 409 Conflict
-□ check DB → password stored as BCrypt hash ✅
-
-LOGIN
-□ POST /api/auth/login (correct credentials) → 200 OK + JSESSIONID cookie
-□ POST /api/auth/login (wrong password)      → 401 Unauthorized
-□ POST /api/auth/login (wrong email)         → 401 Unauthorized
-
-PUBLIC ENDPOINTS (no login needed)
-□ GET /api/books/get/1   (no session) → 200 OK ✅
-□ GET /api/books/search  (no session) → 200 OK ✅
-
-PROTECTED WITHOUT LOGIN
-□ GET    /api/orders     (no session) → 401 Unauthorized ❌
-□ GET    /api/users      (no session) → 401 Unauthorized ❌
-□ POST   /api/books      (no session) → 401 Unauthorized ❌
-□ DELETE /api/books/1    (no session) → 401 Unauthorized ❌
-
-PROTECTED WITH LOGIN
-□ GET    /api/orders     (with session) → 200 OK ✅
-□ GET    /api/users      (with session) → 200 OK ✅
-□ POST   /api/books      (with session) → 201 Created ✅
-□ DELETE /api/books/1    (with session) → 204 No Content ✅
-
-CURRENT USER
-□ GET /api/auth/me (with session)    → 200 OK + user info ✅
-□ GET /api/auth/me (without session) → 401 Not logged in ❌
-
-LOGOUT
-□ POST /api/auth/logout (with session)   → 200 OK ✅
-□ GET  /api/orders (after logout)        → 401 Unauthorized ❌
-```
-
----
-
-## Session vs JWT — Why We Will Move to JWT Next
-```
-Session Based (UC6 — current):
-→ Session stored on SERVER
-→ Every request hits server to check session
-→ Hard to scale (multiple servers = session sharing problem)
-→ Not ideal for mobile apps and REST APIs
-→ Good for learning and understanding ✅
-
-JWT Based (UC7 — next):
-→ Token stored on CLIENT
-→ Server is STATELESS — no session storage
-→ Easy to scale
-→ Works perfectly for REST APIs and mobile apps
-→ Token contains user info + expiry
-→ Production ready ✅
-```
-
----
+## Next UC
+UC8 — OTP Email Verification for Registration
