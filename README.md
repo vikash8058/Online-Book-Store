@@ -1,322 +1,160 @@
-## UC6 — Session Based Security (Spring Security Phase 1)
+# UC8 — OTP Based Email Verification for Registration
 
-### What Was Added
-- Spring Security dependency
-- `SecurityConfig.java` — public and protected endpoints + session management
-- `CustomUserDetailsService.java` — loads user from DB for Spring Security
-- `AuthController.java` — login, logout, current user endpoints
-- `LoginRequest.java` — DTO for login request
-- `LoginResponse.java` — DTO for login response
-- BCrypt password encoding on user registration
-- Session based authentication — login once, session stored on server
+## Overview
+UC8 adds OTP (One-Time Password) based email verification to the registration flow.
+Before a user can register, they must verify their email address by entering a
+6-digit OTP sent to their inbox via Gmail SMTP.
 
----
+## Tech Used
+- Spring Boot 3.2.0
+- Spring Mail (JavaMailSender)
+- Gmail SMTP
+- MySQL (otp_verifications table)
+- Lombok
 
-## Core Concepts
+## New Flow
 
-### What is Authentication vs Authorization
+### Before UC8
 ```
-Authentication → WHO are you? (login)
-Authorization  → WHAT can you do? (permissions)
-
-UC6 covers Authentication only
-Role based Authorization comes in JWT phase
+POST /auth/register { name, email, password }
+→ Account created immediately
 ```
 
-### What is Session Based Security
+### After UC8
 ```
-Step 1 — Register
-→ User registers with email + BCrypt password
-→ Password never stored as plain text
+Step 1 → POST /auth/send-otp  { email }
+         → OTP sent to email (valid 5 minutes)
 
-Step 2 — Login
-→ User sends email + password
-→ Spring Security verifies credentials
-→ Server creates a SESSION
-→ Returns JSESSIONID cookie to client
-
-Step 3 — Protected Request
-→ Client sends JSESSIONID cookie automatically
-→ Server checks session → valid → request proceeds
-
-Step 4 — Logout
-→ Server destroys session
-→ JSESSIONID becomes invalid
-→ Next request → 401 Unauthorized
+Step 2 → POST /auth/register  { name, email, password, otp }
+         → OTP verified → account created
 ```
 
-### What is BCrypt
-```
-Plain password  → "secure123"
-        ↓
-BCryptPasswordEncoder.encode()
-        ↓
-Stored in DB    → "$2a$10$xyzxyzxyz..."
+## New Files
+| File | Purpose |
+|---|---|
+| `model/OtpVerification.java` | JPA entity for otp_verifications table |
+| `repository/OtpVerificationRepository.java` | DB operations for OTP |
+| `service/OtpService.java` | Generate, save, verify OTP logic |
+| `service/EmailService.java` | Send OTP email via Gmail SMTP |
+| `dto/request/SendOtpRequest.java` | Request DTO for /auth/send-otp |
+| `exception/OtpInvalidException.java` | Thrown when OTP is wrong or used |
+| `exception/OtpExpiredException.java` | Thrown when OTP is expired |
 
-If DB is hacked → passwords are safe ✅
-BCrypt is one way → cannot be decoded ✅
-```
+## Modified Files
+| File | What changed |
+|---|---|
+| `dto/request/RegisterRequest.java` | Added otp field |
+| `controller/AuthController.java` | Added /send-otp endpoint, register now verifies OTP |
+| `config/SecurityConfig.java` | Added /auth/send-otp to public endpoints |
+| `exception/GlobalExceptionHandler.java` | Added OTP exception handlers |
+| `application.properties` | Added Gmail SMTP configuration |
+| `pom.xml` | Added spring-boot-starter-mail dependency |
 
----
-
-## How Authentication Works Internally
-```
-POST /api/auth/login
-Body: { "email": "john@example.com", "password": "secure123" }
-        ↓
-AuthenticationManager.authenticate()
-        ↓
-DaoAuthenticationProvider
-        ↓
-CustomUserDetailsService.loadUserByUsername(email)
-        ↓
-Fetches User from DB by email
-        ↓
-BCryptPasswordEncoder.matches(rawPassword, encodedPassword)
-        ↓
-match    → Authentication success ✅
-no match → BadCredentialsException ❌ → 401 Unauthorized
-```
-
----
-
-## New Endpoints Added
-
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `POST` | `/api/auth/login` | Login with email and password | No |
-| `POST` | `/api/auth/logout` | Logout and destroy session | Yes |
-| `GET` | `/api/auth/me` | Get current logged in user info | Yes |
-
----
-
-## Public vs Protected Endpoints
-```
-PUBLIC — no login required:
-✅ POST /api/auth/login          → login
-✅ POST /api/users/register      → register
-✅ GET  /api/books/get/**        → view books
-✅ GET  /api/books/search        → search books
-
-PROTECTED — login required:
-🔒 POST   /api/orders/{userId}   → create order
-🔒 GET    /api/orders            → get all orders
-🔒 GET    /api/orders/{id}       → get order by id
-🔒 DELETE /api/orders/{id}       → delete order
-🔒 PATCH  /api/orders/{id}/status → update order status
-🔒 GET    /api/users             → get all users
-🔒 GET    /api/users/{id}        → get user by id
-🔒 DELETE /api/users/{id}        → delete user
-🔒 POST   /api/books             → create book
-🔒 PUT    /api/books/{id}        → full update book
-🔒 PATCH  /api/books/{id}        → partial update book
-🔒 DELETE /api/books/{id}        → delete book
-🔒 GET    /api/auth/me           → current user info
-🔒 POST   /api/auth/logout       → logout
+## Database
+New table created automatically by JPA on startup:
+```sql
+CREATE TABLE otp_verifications (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email       VARCHAR(255) NOT NULL,
+    otp         VARCHAR(6)   NOT NULL,
+    expiry      DATETIME     NOT NULL,
+    used        BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at  DATETIME     NOT NULL
+);
 ```
 
----
+## OTP Rules
+| Rule | Detail |
+|---|---|
+| Length | 6 digits numeric |
+| Expiry | 5 minutes from generation |
+| One-time use | Marked used after successful verification |
+| Resend | New OTP replaces old one for same email |
+| Range | 100000 to 999999 (always 6 digits) |
 
-## Sample Requests and Responses
+## API Endpoints
 
-### Register User
-```
-POST http://localhost:8080/api/users/register
-Body:
+### POST /auth/send-otp
+Request:
+```json
 {
-  "name": "John Doe",
-  "email": "john@example.com",
-  "password": "secure123"
-}
-
-Response 201 Created:
-{
-  "id": 1,
-  "name": "John Doe",
-  "email": "john@example.com",
-  "role": "CUSTOMER"
+    "email": "vikash@gmail.com"
 }
 ```
-
----
-
-### Login — Success
+Response (200 OK):
 ```
-POST http://localhost:8080/api/auth/login
-Body:
-{
-  "email": "john@example.com",
-  "password": "secure123"
-}
-
-Response 200 OK:
-{
-  "message": "Login successful",
-  "email": "john@example.com",
-  "role": "ROLE_CUSTOMER"
-}
-Cookie set automatically: JSESSIONID=abc123xyz
+"OTP sent to vikash@gmail.com. Valid for 5 minutes."
+```
+Error (409):
+```json
+{ "message": "Email already registered: vikash@gmail.com" }
 ```
 
----
-
-### Login — Wrong Credentials
-```
-POST http://localhost:8080/api/auth/login
-Body:
+### POST /auth/register
+Request:
+```json
 {
-  "email": "john@example.com",
-  "password": "wrongpassword"
-}
-
-Response 401 Unauthorized:
-{
-  "message": "Invalid email or password",
-  "email": "john@example.com",
-  "role": "CUSTOMER"
+    "name"     : "Vikash",
+    "email"    : "vikash@gmail.com",
+    "password" : "Vikash123@",
+    "otp"      : "482910"
 }
 ```
-
----
-
-### Get Current Logged In User
+Response (200 OK):
 ```
-GET http://localhost:8080/api/auth/me
-(JSESSIONID cookie sent automatically)
-
-Response 200 OK:
-{
-  "message": "Currently logged in",
-  "email": "john@example.com",
-  "role": "ROLE_CUSTOMER"
-}
+"User registered successfully. Please login to get your token."
+```
+Errors:
+```json
+{ "message": "Invalid OTP. Please check and try again." }
+{ "message": "OTP has expired. Please request a new OTP." }
+{ "message": "OTP already used. Please request a new OTP." }
 ```
 
----
+### POST /auth/login
+No change from UC7.
 
-### Get Current User — Not Logged In
-```
-GET http://localhost:8080/api/auth/me
-(no session)
-
-Response 401 Unauthorized:
-{
-  "message": "Not logged in"
-}
-```
-
----
-
-### Logout
-```
-POST http://localhost:8080/api/auth/logout
-
-Response 200 OK:
-"Logged out successfully"
-```
-
----
-
-### Access Protected Endpoint Without Login
-```
-GET http://localhost:8080/api/orders
-
-Response 401 Unauthorized
-```
-
----
-
-### Access Protected Endpoint With Login
-```
-GET http://localhost:8080/api/orders
-(JSESSIONID cookie sent automatically)
-
-Response 200 OK:
-[...]
-```
-
----
-
-## Files Changed Summary
-
-| File | Type | Change |
+## Error Responses
+| Scenario | Status | Message |
 |---|---|---|
-| `pom.xml` | Modified | Added Spring Security dependency |
-| `SecurityConfig.java` | New | Security rules, session management, BCrypt bean |
-| `CustomUserDetailsService.java` | New | Loads user from DB for Spring Security |
-| `AuthController.java` | New | Login, logout, current user endpoints |
-| `LoginRequest.java` | New | DTO for login request |
-| `LoginResponse.java` | New | DTO for login response |
-| `UserService.java` | Modified | Encode password with BCrypt before saving |
+| Wrong OTP | 400 | Invalid OTP. Please check and try again. |
+| Expired OTP | 400 | OTP has expired. Please request a new OTP. |
+| Already used OTP | 400 | OTP already used. Please request a new OTP. |
+| No OTP requested | 400 | No OTP found for this email. Please request a new OTP. |
+| Duplicate email | 409 | Email already registered: {email} |
 
----
+## How to Test
 
-## Postman Testing — UC6
-
-### Important Postman Setup
+### Step 1 — Send OTP
 ```
-Postman → Settings → Cookies → Enable
-Postman will automatically store and send JSESSIONID cookie
-No manual work needed ✅
+POST /auth/send-otp
+{ "email": "your-email@gmail.com" }
 ```
 
----
+### Step 2 — Check inbox for 6-digit OTP
 
-### Complete Testing Checklist
+### Step 3 — Register with OTP
 ```
-REGISTRATION
-□ POST /api/users/register (new user)       → 201 Created
-□ POST /api/users/register (same email)     → 409 Conflict
-□ check DB → password stored as BCrypt hash ✅
-
-LOGIN
-□ POST /api/auth/login (correct credentials) → 200 OK + JSESSIONID cookie
-□ POST /api/auth/login (wrong password)      → 401 Unauthorized
-□ POST /api/auth/login (wrong email)         → 401 Unauthorized
-
-PUBLIC ENDPOINTS (no login needed)
-□ GET /api/books/get/1   (no session) → 200 OK ✅
-□ GET /api/books/search  (no session) → 200 OK ✅
-
-PROTECTED WITHOUT LOGIN
-□ GET    /api/orders     (no session) → 401 Unauthorized ❌
-□ GET    /api/users      (no session) → 401 Unauthorized ❌
-□ POST   /api/books      (no session) → 401 Unauthorized ❌
-□ DELETE /api/books/1    (no session) → 401 Unauthorized ❌
-
-PROTECTED WITH LOGIN
-□ GET    /api/orders     (with session) → 200 OK ✅
-□ GET    /api/users      (with session) → 200 OK ✅
-□ POST   /api/books      (with session) → 201 Created ✅
-□ DELETE /api/books/1    (with session) → 204 No Content ✅
-
-CURRENT USER
-□ GET /api/auth/me (with session)    → 200 OK + user info ✅
-□ GET /api/auth/me (without session) → 401 Not logged in ❌
-
-LOGOUT
-□ POST /api/auth/logout (with session)   → 200 OK ✅
-□ GET  /api/orders (after logout)        → 401 Unauthorized ❌
+POST /auth/register
+{ "name": "...", "email": "...", "password": "...", "otp": "482910" }
 ```
 
----
-
-## Session vs JWT — Why We Will Move to JWT Next
+### Step 4 — Login
 ```
-Session Based (UC6 — current):
-→ Session stored on SERVER
-→ Every request hits server to check session
-→ Hard to scale (multiple servers = session sharing problem)
-→ Not ideal for mobile apps and REST APIs
-→ Good for learning and understanding ✅
-
-JWT Based (UC7 — next):
-→ Token stored on CLIENT
-→ Server is STATELESS — no session storage
-→ Easy to scale
-→ Works perfectly for REST APIs and mobile apps
-→ Token contains user info + expiry
-→ Production ready ✅
+POST /auth/login
+{ "email": "...", "password": "..." }
 ```
 
----
+## Gmail SMTP Config (application.properties)
+```properties
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=your-email@gmail.com
+spring.mail.password=your-app-password
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+spring.mail.properties.mail.smtp.starttls.required=true
+```
+
+## Previous UC
+UC7 — JWT Based Security

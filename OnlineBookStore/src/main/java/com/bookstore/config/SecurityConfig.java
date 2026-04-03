@@ -38,6 +38,7 @@ public class SecurityConfig {
                 //Public endpoints 
                 .requestMatchers("/auth/register").permitAll()
                 .requestMatchers("/auth/login").permitAll()
+                .requestMatchers("/auth/send-otp").permitAll() 
 
                 .requestMatchers("/auth/hash").permitAll()
                 //ADMIN only

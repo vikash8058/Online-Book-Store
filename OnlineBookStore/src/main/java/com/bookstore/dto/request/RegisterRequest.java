@@ -31,4 +31,7 @@ public class RegisterRequest {
 			message = "Password must contain letters(atleast 1 capital letter), special character and numbers"
 			)
 	private String password;
+	
+	@NotBlank
+    private String otp;
 }
