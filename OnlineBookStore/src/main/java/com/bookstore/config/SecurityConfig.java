@@ -1,6 +1,8 @@
 package com.bookstore.config;
 
 import com.bookstore.filter.JwtAuthFilter;
+import com.bookstore.filter.OAuth2AuthenticationSuccessHandler;
+import com.bookstore.service.CustomOAuth2UserService;
 import com.bookstore.service.CustomUserDetailsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -28,6 +30,14 @@ public class SecurityConfig {
     private final CustomUserDetailsService customUserDetailsService;
     private final JwtAuthFilter jwtAuthFilter;
 
+    /*
+     * UC9 — two new beans injected:
+     * CustomOAuth2UserService      → loads/creates user from Google
+     * OAuth2AuthenticationSuccessHandler → generates JWT after Google login
+     */
+    private final CustomOAuth2UserService customOAuth2UserService;
+    private final OAuth2AuthenticationSuccessHandler oAuth2SuccessHandler;
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -35,56 +45,69 @@ public class SecurityConfig {
 
             .authorizeHttpRequests(auth -> auth
 
-                //Public endpoints 
+                // Public endpoints — no token needed
                 .requestMatchers("/auth/register").permitAll()
                 .requestMatchers("/auth/login").permitAll()
-                .requestMatchers("/auth/send-otp").permitAll() 
+                .requestMatchers("/auth/send-otp").permitAll()
 
-                .requestMatchers("/auth/hash").permitAll()
-                //ADMIN only
+                /*
+                 * UC9 — OAuth2 login endpoints — must be public
+                 * /oauth2/authorization/google → triggers Google login redirect
+                 * /login/oauth2/code/google    → Google redirects back here with code
+                 */
+                .requestMatchers("/oauth2/**").permitAll()
+                .requestMatchers("/login/oauth2/**").permitAll()
 
-                // User management
+                // ADMIN only endpoints
                 .requestMatchers("/api/users/**").hasRole("ADMIN")
-
-                // Book management
                 .requestMatchers("/api/books/create").hasRole("ADMIN")
                 .requestMatchers("/api/books/update/**").hasRole("ADMIN")
                 .requestMatchers("/api/books/partialUpdate/**").hasRole("ADMIN")
                 .requestMatchers("/api/books/delete/**").hasRole("ADMIN")
-
-                // Order management
                 .requestMatchers("/api/orders/get").hasRole("ADMIN")
                 .requestMatchers("/api/orders/delete/**").hasRole("ADMIN")
                 .requestMatchers("/api/orders/status/**").hasRole("ADMIN")
 
-                //  CUSTOMER only 
+                // CUSTOMER only
                 .requestMatchers("/api/orders/create/**").hasRole("CUSTOMER")
 
-                // ADMIN + CUSTOMER 
-
-                // Book viewing
+                // ADMIN + CUSTOMER
                 .requestMatchers("/api/books/get/**").hasAnyRole("ADMIN", "CUSTOMER")
-                .requestMatchers("/api/books/get").hasAnyRole("ADMIN", "CUSTOMER")
                 .requestMatchers("/api/books/search").hasAnyRole("ADMIN", "CUSTOMER")
                 .requestMatchers("/api/books/author").hasAnyRole("ADMIN", "CUSTOMER")
-
-                // Order viewing
                 .requestMatchers("/api/orders/get/**").hasAnyRole("ADMIN", "CUSTOMER")
                 .requestMatchers("/api/orders/user/**").hasAnyRole("ADMIN", "CUSTOMER")
 
-                //Everything else needs authentication 
                 .anyRequest().authenticated()
             )
 
-            //Stateless — no sessions 
+            /*
+             * UC9 — OAuth2 login configuration.
+             * oauth2Login() → enables Spring's built-in OAuth2 flow
+             *
+             * userInfoEndpoint().userService(customOAuth2UserService)
+             * → tells Spring: after Google login, use OUR service
+             *   to load/create user instead of default behavior
+             *
+             * successHandler(oAuth2SuccessHandler)
+             * → tells Spring: after success, use OUR handler
+             *   to generate JWT and return it
+             */
+            .oauth2Login(oauth2 -> oauth2
+                .userInfoEndpoint(userInfo -> userInfo
+                    .userService(customOAuth2UserService)
+                )
+                .successHandler(oAuth2SuccessHandler)
+            )
+
+            // Stateless — no sessions (same as UC7)
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
 
-            //Register AuthenticationProvider 
             .authenticationProvider(authenticationProvider())
 
-            //Add JwtAuthFilter before Spring's default filter 
+            // JwtAuthFilter runs before Spring's filter (same as UC7)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -92,7 +115,8 @@ public class SecurityConfig {
 
     @Bean
     AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(customUserDetailsService);
+        DaoAuthenticationProvider provider =
+                new DaoAuthenticationProvider(customUserDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
         return provider;
     }

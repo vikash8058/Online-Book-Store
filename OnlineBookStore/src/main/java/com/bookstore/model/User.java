@@ -8,7 +8,6 @@ import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-
 import java.util.Collection;
 import java.util.List;
 
@@ -21,62 +20,84 @@ import java.util.List;
 @Builder
 public class User implements UserDetails {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
 
-    @NotBlank
-    @Column(nullable = false)
-    private String name;
+	@NotBlank
+	@Column(nullable = false)
+	private String name;
 
-    @Email
-    @NotBlank
-    @Column(nullable = false, unique = true)
-    private String email;
+	@Email
+	@NotBlank
+	@Column(nullable = false, unique = true)
+	private String email;
 
-    @NotBlank
-    @Size(min = 8)
-    @Column(nullable = false)
-    private String password;
+	/*
+	 * UC9 change — password is now nullable. LOCAL users → have BCrypt hashed
+	 * password GOOGLE users → password is null (Google handles auth)
+	 * Removed @NotBlank and nullable = false
+	 */
+	@Size(min = 8)
+	@Column(nullable = true)
+	private String password;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private Role role;
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	private Role role;
 
-    //UserDetails methods
+	/*
+	 * UC9 — new field. Tracks how user registered: LOCAL → email + OTP registration
+	 * GOOGLE → Google OAuth2 login Default = LOCAL for all existing users.
+	 */
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false)
+	@Builder.Default
+	private AuthProvider authProvider = AuthProvider.LOCAL;
 
-    @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
-    }
+	/*
+	 * UC9 — new field. Stores Google's unique user ID (sub claim from Google's ID
+	 * Token). Used to find existing Google users on subsequent logins. null for
+	 * LOCAL users.
+	 */
+	@Column(nullable = true)
+	private String googleId;
 
-    @Override
-    public String getUsername() {
-        return email;
-    }
+	//UserDetails methods
 
-    @Override
-    public String getPassword() {
-        return password;
-    }
+	@Override
+	public Collection<? extends GrantedAuthority> getAuthorities() {
+		return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+	}
 
-    @Override
-    public boolean isAccountNonExpired() {
-        return true;
-    }
+	@Override
+	public String getUsername() {
+		return email;
+	}
 
-    @Override
-    public boolean isAccountNonLocked() {
-        return true;
-    }
+	@Override
+	public String getPassword() {
+		return password;
+	}
 
-    @Override
-    public boolean isCredentialsNonExpired() {
-        return true;
-    }
+	// All return true — no account locking/expiry logic needed
+	@Override
+	public boolean isAccountNonExpired() {
+		return true;
+	}
 
-    @Override
-    public boolean isEnabled() {
-        return true;
-    }
+	@Override
+	public boolean isAccountNonLocked() {
+		return true;
+	}
+
+	@Override
+	public boolean isCredentialsNonExpired() {
+		return true;
+	}
+
+	@Override
+	public boolean isEnabled() {
+		return true;
+	}
 }
