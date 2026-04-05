@@ -3,6 +3,9 @@ package com.bookstore.controller;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -70,6 +73,28 @@ public class BookController {
 	@GetMapping("/author")
 	public ResponseEntity<List<BookResponse>> searchByAuthor(@RequestParam String authorName) {
 	    return ResponseEntity.ok(bookService.searchBookByAuthor(authorName));
+	}
+	
+	/*
+	 * GET /api/books/paged — UC10
+	 *
+	 * Returns paginated list of books.
+	 * Query parameters:
+	 *   page → page number (default 0 = first page)
+	 *   size → books per page (default 10)
+	 *   sort → sort field and direction
+	 *         e.g. sort=price,asc or sort=title,desc
+	 *
+	 * Example calls:
+	 *   /api/books/paged              → page 0, size 10, default sort
+	 *   /api/books/paged?page=1&size=5 → page 2, 5 books per page
+	 *   /api/books/paged?sort=price,asc → sorted by price ascending
+	 *
+	 * @PageableDefault → sets default values if not provided in request
+	 */
+	@GetMapping("/paged")
+	public ResponseEntity<Page<BookResponse>> getAllBooksPaginated(@PageableDefault(page = 0, size = 10, sort = "id") Pageable pageable) {
+	    return ResponseEntity.ok(bookService.getAllBooksPaginated(pageable));
 	}
 
 }

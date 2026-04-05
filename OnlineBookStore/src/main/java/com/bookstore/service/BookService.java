@@ -3,6 +3,8 @@ package com.bookstore.service;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.bookstore.dto.request.BookRequest;
@@ -118,5 +120,29 @@ public class BookService {
 	            .stream()
 	            .map(this::toResponse)
 	            .toList();
+	}
+	
+	/*
+	 * getAllBooksPaginated() — UC10
+	 *
+	 * Returns books in pages instead of all at once.
+	 * Useful when DB has thousands of books.
+	 *
+	 * Pageable → Spring's object carrying:
+	 *   page → which page (0-based, page 0 = first page)
+	 *   size → how many books per page
+	 *   sort → sort by which field and direction
+	 *
+	 * Page<BookResponse> → Spring's response object containing:
+	 *   content          → list of books for this page
+	 *   totalElements    → total books in DB
+	 *   totalPages       → total number of pages
+	 *   number           → current page number
+	 *   size             → page size
+	 */
+	public Page<BookResponse> getAllBooksPaginated(Pageable pageable) {
+	    return bookRepository.findAll(pageable)
+	            .map(this::toResponse);
+	            // .map() converts each Book entity to BookResponse DTO
 	}
 }

@@ -58,3 +58,4 @@ logs/
 .env
 .metadata/
 .env.*
+.factorypath
