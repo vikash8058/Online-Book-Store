@@ -1,6 +1,5 @@
 package com.bookstore.service;
 
-import com.bookstore.model.AuthProvider;
 import com.bookstore.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -27,21 +26,18 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username)
             throws UsernameNotFoundException {
 
-        // Find user by email — throws if not found
         var user = userRepository.findByEmail(username)
                 .orElseThrow(() -> new UsernameNotFoundException(
                         "User not found with email: " + username));
 
         /*
-         * UC9 check — prevent Google users from using password login.
-         * If authProvider = GOOGLE → they have no password
-         * → tell them to use Google login instead.
+         * UC9 fix — only block Google users from PASSWORD login.
+         * Do NOT block here — this method is also called by JwtAuthFilter
+         * for token validation. Google users with valid JWT must pass through.
+         *
+         * The Google user block is only in AuthController.login()
+         * where password login is attempted.
          */
-        if (user.getAuthProvider() == AuthProvider.GOOGLE) {
-            throw new UsernameNotFoundException(
-                    "This account uses Google login. Please use 'Login with Google'.");
-        }
-
         return user;
     }
 }

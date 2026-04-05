@@ -1,9 +1,12 @@
 package com.bookstore.config;
 
 import com.bookstore.filter.JwtAuthFilter;
+import com.bookstore.filter.OAuth2AuthenticationFailureHandler;
 import com.bookstore.filter.OAuth2AuthenticationSuccessHandler;
 import com.bookstore.service.CustomOAuth2UserService;
 import com.bookstore.service.CustomUserDetailsService;
+
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,6 +40,7 @@ public class SecurityConfig {
      */
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2AuthenticationSuccessHandler oAuth2SuccessHandler;
+    private final OAuth2AuthenticationFailureHandler oAuth2FailureHandler;
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -94,11 +98,26 @@ public class SecurityConfig {
              *   to generate JWT and return it
              */
             .oauth2Login(oauth2 -> oauth2
-                .userInfoEndpoint(userInfo -> userInfo
-                    .userService(customOAuth2UserService)
-                )
-                .successHandler(oAuth2SuccessHandler)
-            )
+            	    .userInfoEndpoint(userInfo -> userInfo
+            	        .userService(customOAuth2UserService)
+            	    )
+            	    .successHandler(oAuth2SuccessHandler)
+            	    .failureHandler(oAuth2FailureHandler)
+            	)
+            	/*
+            	 * When JWT is missing/expired on API calls
+            	 * → return 401 JSON instead of redirecting to Google login page
+            	 * This prevents Postman from receiving HTML instead of JSON
+            	 */
+            	.exceptionHandling(ex -> ex
+            	    .authenticationEntryPoint((request, response, authException) -> {
+            	        response.setContentType("application/json");
+            	        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            	        response.getWriter().write(
+            	            "{\"error\": \"Unauthorized. Please login to get a valid token.\"}"
+            	        );
+            	    })
+            	)
 
             // Stateless — no sessions (same as UC7)
             .sessionManagement(session -> session
