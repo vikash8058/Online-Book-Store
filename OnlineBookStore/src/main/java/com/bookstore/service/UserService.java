@@ -6,6 +6,9 @@ import com.bookstore.exception.UserNotFoundException;
 import com.bookstore.model.User;
 import com.bookstore.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -65,5 +68,16 @@ public class UserService {
         }
 
         return toResponse(userRepository.save(user));
+    }
+    
+    public UserResponse getCurrentUser() {
+        // Get current user from SecurityContext
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String email = authentication.getName();
+        
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new UserNotFoundException("User not found"));
+        
+        return toResponse(user);
     }
 }

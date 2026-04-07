@@ -60,4 +60,31 @@ public class EmailService {
         );
         mailSender.send(message);
     }
+        /*
+         * sendPasswordResetOtpEmail() — UC11
+         * Sends 6-digit OTP for password reset.
+         *
+         * Different subject and body from registration OTP
+         * so user knows this is for password reset.
+         * Same OTP mechanism — 6 digits, 5 min expiry.
+         */
+        public void sendPasswordResetOtpEmail(String toEmail, String otp) {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromEmail);
+            message.setTo(toEmail);
+            message.setSubject("Your OTP for Online Book Store Password Reset");
+            message.setText(
+                    "Hi,\n\n" +
+                    "You requested a password reset for your Book Store account.\n\n" +
+                    "Your OTP for password reset is:\n\n" +
+                    "        " + otp + "\n\n" +
+                    "This OTP is valid for 5 minutes only.\n" +
+                    "If you did not request this, please ignore this email.\n" +
+                    "Do not share this OTP with anyone.\n\n" +
+                    "Regards,\n" +
+                    "Online Book Store - Vikash Prajapati"
+            );
+            mailSender.send(message);
+        }
+    
 }

@@ -187,15 +187,18 @@ public class OrderService {
 		}
 	}
 	
-	//method to get Order by userId
-	public List<OrderResponse> getOrdersByUser(Long userId){
-		if(userRepository.existsById(userId)) {
-			throw new UserNotFoundException(userId);
-		}
-		
-		return orderRepository.findById(userId)
-				.stream()
-				.map(this::toResponse)
-				.toList();
+	// method to get orders by userId
+	public List<OrderResponse> getOrdersByUser(Long userId) {
+
+	    // throw exception if user does NOT exist
+	    if (!userRepository.existsById(userId)) {
+	        throw new UserNotFoundException(userId);
+	    }
+
+	    // find all orders belonging to this user
+	    return orderRepository.findByUserId(userId)
+	            .stream()
+	            .map(this::toResponse)
+	            .toList();
 	}
 }

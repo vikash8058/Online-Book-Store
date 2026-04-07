@@ -56,6 +56,7 @@ public class SecurityConfig {
 
 				.authorizeHttpRequests(auth -> auth
 
+						
 						// Public endpoints — no token needed
 						.requestMatchers("/auth/register").permitAll()
 						.requestMatchers("/auth/login").permitAll()
@@ -63,6 +64,9 @@ public class SecurityConfig {
 						.requestMatchers("/swagger-ui/**").permitAll()
 						.requestMatchers("/swagger-ui.html").permitAll()
 						.requestMatchers("/v3/api-docs/**").permitAll()
+						.requestMatchers("/auth/forgot-password").permitAll()
+						.requestMatchers("/auth/reset-password").permitAll()
+						// /auth/update-password is NOT here — needs JWT token
 
 						/*
 						 * UC9 — OAuth2 login endpoints — must be public /oauth2/authorization/google →
@@ -71,28 +75,34 @@ public class SecurityConfig {
 						 */
 						.requestMatchers("/oauth2/**").permitAll()
 						.requestMatchers("/login/oauth2/**").permitAll()
-
-						// ADMIN only endpoints
-						.requestMatchers("/api/users/**").hasRole("ADMIN")
-						.requestMatchers("/api/books/create").hasRole("ADMIN")
-						.requestMatchers("/api/books/update/**").hasRole("ADMIN")
-						.requestMatchers("/api/books/partialUpdate/**").hasRole("ADMIN")
-						.requestMatchers("/api/books/delete/**").hasRole("ADMIN")
-						.requestMatchers("/api/orders/get")
-						.hasRole("ADMIN").requestMatchers("/api/orders/delete/**").hasRole("ADMIN")
-						.requestMatchers("/api/orders/status/**").hasRole("ADMIN")
-
-						// CUSTOMER only
-						.requestMatchers("/api/orders/create/**").hasRole("CUSTOMER")
-
+						
+						
+						.requestMatchers("/api/orders/user/**").hasRole("CUSTOMER")
 						// ADMIN + CUSTOMER
+						.requestMatchers("/api/users/**").hasAnyRole("CUSTOMER","ADMIN")
 						.requestMatchers("/api/books/get/**").hasAnyRole("ADMIN", "CUSTOMER")
 						.requestMatchers("/api/books/search").hasAnyRole("ADMIN", "CUSTOMER")
 						.requestMatchers("/api/books/author").hasAnyRole("ADMIN", "CUSTOMER")
 						.requestMatchers("/api/orders/get/**").hasAnyRole("ADMIN", "CUSTOMER")
 						.requestMatchers("/api/orders/user/**").hasAnyRole("ADMIN", "CUSTOMER")
 						.requestMatchers("/api/books/paged").hasAnyRole("ADMIN", "CUSTOMER")
+						.requestMatchers("/api/users/me").hasAnyRole("CUSTOMER","ADMIN")
+						.requestMatchers("/api/users/me").hasAnyRole("CUSTOMER","ADMIN")
+						
+						// ADMIN only endpoints
+						.requestMatchers("/api/books/create").hasRole("ADMIN")
+						.requestMatchers("/api/books/update/**").hasRole("ADMIN")
+						.requestMatchers("/api/books/partialUpdate/**").hasRole("ADMIN")
+						.requestMatchers("/api/books/delete/**").hasRole("ADMIN")
+						.requestMatchers("/api/orders/get").hasRole("ADMIN")
+						.requestMatchers("/api/orders/delete/**").hasRole("ADMIN")
+						.requestMatchers("/api/orders/status/**").hasRole("ADMIN")
 
+						// CUSTOMER only
+						.requestMatchers("/api/orders/create/**").hasRole("CUSTOMER")
+						
+
+						
 						.anyRequest().authenticated())
 
 				/*

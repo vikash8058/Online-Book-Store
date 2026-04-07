@@ -1,8 +1,11 @@
 package com.bookstore.controller;
 
+import com.bookstore.dto.request.ForgotPasswordRequest;
 import com.bookstore.dto.request.LoginRequest;
 import com.bookstore.dto.request.RegisterRequest;
+import com.bookstore.dto.request.ResetPasswordRequest;
 import com.bookstore.dto.request.SendOtpRequest;
+import com.bookstore.dto.request.UpdatePasswordRequest;
 import com.bookstore.dto.response.AuthResponse;
 import com.bookstore.exception.DuplicateEmailException;
 import com.bookstore.model.Role;
@@ -10,12 +13,16 @@ import com.bookstore.model.User;
 import com.bookstore.repository.UserRepository;
 import com.bookstore.service.JwtService;
 import com.bookstore.service.OtpService;
+import com.bookstore.service.PasswordService;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,6 +42,7 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final OtpService otpService; // UC8 — injected for OTP operations
+    private final PasswordService passwordService;
 
     /*
      * POST /auth/send-otp
@@ -118,5 +126,90 @@ public class AuthController {
         String token = jwtService.generateToken(user);
 
         return ResponseEntity.ok(new AuthResponse(token));
+    }
+    
+    /*
+     * POST /auth/forgot-password — UC11
+     * Public endpoint — no JWT needed.
+     *
+     * Flow:
+     *  1. Validate email
+     *  2. PasswordService.forgotPassword()
+     *     → find user → check LOCAL → generate OTP → send email
+     *  3. Return success message
+     *
+     * Security note: always return same message whether
+     * email exists or not — prevents email enumeration attack.
+     * (We show "if account exists" message)
+     */
+    @PostMapping("/forgot-password")
+    public ResponseEntity<String> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+
+        passwordService.forgotPassword(request.getEmail());
+
+        return ResponseEntity.ok(
+                "If an account exists with this email, an OTP has been sent. " +
+                "Valid for 5 minutes.");
+    }
+
+    /*
+     * POST /auth/reset-password — UC11
+     * Public endpoint — no JWT needed.
+     *
+     * Flow:
+     *  1. Validate request fields
+     *  2. PasswordService.resetPassword()
+     *     → find user → verify OTP → update password
+     *  3. Return success message
+     */
+    @PostMapping("/reset-password")
+    public ResponseEntity<String> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+
+        passwordService.resetPassword(
+                request.getEmail(),
+                request.getOtp(),
+                request.getNewPassword()
+        );
+
+        return ResponseEntity.ok(
+                "Password reset successfully. Please login with your new password.");
+    }
+
+    /*
+     * POST /auth/update-password — UC11
+     * PROTECTED endpoint — JWT token required.
+     *
+     * @AuthenticationPrincipal → gets currently logged in user
+     * from Security Context (set by JwtAuthFilter).
+     * No need to pass email in request body — we get it from token.
+     *
+     * Flow:
+     *  1. Get logged in user from Security Context
+     *  2. PasswordService.updatePassword()
+     *     → verify current password → update to new password
+     *  3. Return success message
+     */
+    @PostMapping("/update-password")
+    public ResponseEntity<String> updatePassword(
+            @Valid @RequestBody UpdatePasswordRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+            /*
+             * @AuthenticationPrincipal UserDetails userDetails
+             * → Spring injects currently logged in user
+             * → userDetails.getUsername() = email from JWT token
+             * → No need to pass email in request body
+             */
+
+        passwordService.updatePassword(
+                userDetails.getUsername(),
+                // email from JWT token via Security Context
+                request.getCurrentPassword(),
+                request.getNewPassword()
+        );
+
+        return ResponseEntity.ok(
+                "Password updated successfully.");
     }
 }

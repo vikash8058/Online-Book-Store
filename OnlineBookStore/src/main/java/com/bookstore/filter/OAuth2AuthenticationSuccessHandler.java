@@ -67,6 +67,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 		String token = jwtService.generateToken(user);
 
 		// Example: send token in response
+		// Redirect to frontend with token in query parameter
+	    String redirectUrl = "http://localhost:3000/login?token=" + token;
+	    response.sendRedirect(redirectUrl);
 
 		/*
 		 * Generate JWT token — EXACT same method as UC7 login. Token contains:
@@ -83,8 +86,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 		 *
 		 * For Postman testing: → writing to response body is easiest to read
 		 */
-		response.setContentType("application/json");
-		response.getWriter().write("{\"token\":\"" + token + "\"}");
+//		response.setContentType("application/json");
+//		response.getWriter().write("{\"token\":\"" + token + "\"}");
 
 	}
+	
 }
