@@ -109,14 +109,14 @@ public class BookService {
 	
 	//method to search a book
 	public List<BookResponse> searchBookByTitle(String title) {
-		return bookRepository.findByTitle(title)
+		return bookRepository.findByTitleContainingIgnoreCase(title)
 				.stream()
 				.map(this::toResponse)
 				.toList();	
 	}
 	
 	public List<BookResponse> searchBookByAuthor(String authorName) {
-	    return bookRepository.findByAuthorName(authorName)
+	    return bookRepository.findByAuthorNameContainingIgnoreCase(authorName)
 	            .stream()
 	            .map(this::toResponse)
 	            .toList();
