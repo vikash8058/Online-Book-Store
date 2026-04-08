@@ -1,154 +1,176 @@
-# UC11 — Forgot Password + Update Password
+# UC12 — Persistent Cart Management
+
+## Branch
+`feature/UC12-cart-management`
 
 ## Overview
-UC11 adds two password management features to the Book Store:
-1. **Forgot Password** — user forgot password → get OTP on email → reset password
-2. **Update Password** — logged in user → change current password to new one
+Implements a server-side persistent cart stored in MySQL. The cart is tied to the logged-in user via JWT token, survives logout/login, and auto-clears after an order is placed.
 
-Both features work only for LOCAL users.
-GOOGLE users have no password — they use Google login.
+---
 
-## Tech Used
-- Spring Boot 3.2.0
-- Spring Mail (reused from UC8)
-- OtpService (reused from UC8)
-- BCryptPasswordEncoder
-- JWT Security Context (@AuthenticationPrincipal)
-- MySQL
+## Why Server-Side Cart?
 
-## New Flow
+| Approach | Survives Logout? | Multi-Device? | Production-Ready? |
+|---|---|---|---|
+| React state (useState) | ❌ | ❌ | ❌ |
+| localStorage | ✅ (same browser) | ❌ | ❌ |
+| **Database (UC12)** | **✅** | **✅** | **✅** |
 
-### Forgot Password Flow
-```
-Step 1 → POST /auth/forgot-password { email }
-         → OTP sent to email (valid 5 minutes)
+This is the same approach used by Amazon, Flipkart, and all major e-commerce platforms.
 
-Step 2 → POST /auth/reset-password { email, otp, newPassword }
-         → OTP verified → password updated in DB
-```
+---
 
-### Update Password Flow
-```
-POST /auth/update-password
-Authorization: Bearer <JWT token>
-Body: { currentPassword, newPassword }
-→ Current password verified → new password saved
-```
+## Database Tables Added
+
+### `carts`
+| Column | Type | Notes |
+|---|---|---|
+| id | BIGINT (PK) | Auto-generated |
+| user_id | BIGINT (FK) | References `users.id` — unique (one cart per user) |
+| created_at | DATETIME | Auto-set on creation |
+
+### `cart_items`
+| Column | Type | Notes |
+|---|---|---|
+| id | BIGINT (PK) | Auto-generated |
+| cart_id | BIGINT (FK) | References `carts.id` |
+| book_id | BIGINT (FK) | References `books.id` |
+| quantity | INT | Min: 1 |
+| added_at | DATETIME | Auto-set on creation |
+
+---
 
 ## New Files
-| File | Purpose |
-|---|---|
-| `dto/request/ForgotPasswordRequest.java` | Request DTO for /auth/forgot-password |
-| `dto/request/ResetPasswordRequest.java` | Request DTO for /auth/reset-password |
-| `dto/request/UpdatePasswordRequest.java` | Request DTO for /auth/update-password |
-| `service/PasswordService.java` | Core logic for all password operations |
+
+```
+src/main/java/com/bookstore/
+├── model/
+│   ├── Cart.java
+│   └── CartItem.java
+├── repository/
+│   ├── CartRepository.java
+│   └── CartItemRepository.java
+├── dto/
+│   ├── request/
+│   │   ├── AddToCartRequest.java
+│   │   └── UpdateCartItemRequest.java
+│   └── response/
+│       ├── CartItemResponse.java
+│       └── CartResponse.java
+├── exception/
+│   └── CartItemNotFoundException.java
+├── service/
+│   └── CartService.java
+└── controller/
+    └── CartController.java
+```
 
 ## Modified Files
-| File | What changed |
+
+| File | Change |
 |---|---|
-| `service/EmailService.java` | Added sendPasswordResetOtpEmail() method |
-| `service/OtpService.java` | Added generateOtpAndSave() — returns OTP string |
-| `controller/AuthController.java` | Added 3 new endpoints |
-| `config/SecurityConfig.java` | Added /auth/forgot-password and /auth/reset-password as public |
+| `GlobalExceptionHandler.java` | Added handler for `CartItemNotFoundException` |
+| `SecurityConfig.java` | Added `/api/cart/**` → `ROLE_CUSTOMER` only |
+| `OrderService.java` | Added `cartService.clearCart()` after order is placed |
+
+---
 
 ## API Endpoints
 
-### POST /auth/forgot-password (Public)
-Request:
-```json
-{ "email": "vikash@gmail.com" }
-```
-Response (200 OK):
-```
-"If an account exists with this email, an OTP has been sent. Valid for 5 minutes."
-```
+All endpoints require `Authorization: Bearer <JWT_TOKEN>` (CUSTOMER role).
 
-### POST /auth/reset-password (Public)
-Request:
-```json
-{
-    "email"       : "vikash@gmail.com",
-    "otp"         : "482910",
-    "newPassword" : "NewPass123@"
-}
-```
-Response (200 OK):
-```
-"Password reset successfully. Please login with your new password."
-```
-
-### POST /auth/update-password (JWT Required)
-Request:
-```
-Authorization: Bearer <JWT token>
-```
-```json
-{
-    "currentPassword" : "OldPass123@",
-    "newPassword"     : "NewPass123@"
-}
-```
-Response (200 OK):
-```
-"Password updated successfully."
-```
-
-## Rules
-| Rule | Detail |
-|---|---|
-| LOCAL users only | GOOGLE users have no password |
-| OTP expiry | 5 minutes — same as registration OTP |
-| OTP reuse | Cannot use same OTP twice |
-| Same password | New password cannot be same as current |
-| Security message | /forgot-password always returns same message — prevents email enumeration |
-| @AuthenticationPrincipal | Email extracted from JWT — not passed in request body |
-
-## OtpService changes — UC11
-```
-Before UC11:
-generateAndSendOtp() → generates OTP + saves + sends REGISTRATION email
-
-After UC11:
-generateOtpAndSave()  → generates OTP + saves to DB → returns OTP string
-                        caller decides which email to send
-
-generateAndSendOtp() still works for UC8 registration
-generateOtpAndSave() used by PasswordService for password reset email
-```
-
-## Error Responses
-| Scenario | Status | Message |
+| Method | URL | Description |
 |---|---|---|
-| Email not registered | 200 | Same success message (security) |
-| GOOGLE user on forgot-password | 400 | Google account — password reset not available |
-| GOOGLE user on update-password | 400 | Google account — password update not available |
-| Wrong OTP | 400 | Invalid OTP. Please check and try again. |
-| Expired OTP | 400 | OTP has expired. Please request a new OTP. |
-| Already used OTP | 400 | OTP already used. Please request a new OTP. |
-| Wrong current password | 400 | Current password is incorrect. |
-| Same as current password | 400 | New password cannot be same as current password. |
-| No JWT token on update | 401 | Unauthorized |
+| POST | `/api/cart/add` | Add book to cart (creates cart if first time) |
+| GET | `/api/cart` | View current user's cart |
+| PATCH | `/api/cart/update/{cartItemId}` | Update item quantity |
+| DELETE | `/api/cart/remove/{cartItemId}` | Remove one item from cart |
+| DELETE | `/api/cart/clear` | Clear all items from cart |
+
+---
+
+## Request / Response Examples
+
+### POST /api/cart/add
+
+**Request Body:**
+```json
+{
+  "bookId": 1,
+  "quantity": 2
+}
+```
+
+**Response:**
+```json
+{
+  "cartId": 1,
+  "items": [
+    {
+      "cartItemId": 1,
+      "bookId": 1,
+      "bookTitle": "Clean Code",
+      "authorName": "Robert C. Martin",
+      "price": 499.0,
+      "quantity": 2,
+      "itemTotal": 998.0
+    }
+  ],
+  "totalItems": 1,
+  "grandTotal": 998.0
+}
+```
+
+### GET /api/cart
+
+Returns the same `CartResponse` structure as above.
+
+### PATCH /api/cart/update/{cartItemId}
+
+**Request Body:**
+```json
+{
+  "quantity": 5
+}
+```
+
+### DELETE /api/cart/remove/{cartItemId}
+
+No request body. Returns updated `CartResponse`.
+
+### DELETE /api/cart/clear
+
+**Response:**
+```
+Cart cleared successfully.
+```
+
+---
+
+## Key Design Decisions
+
+**Cart auto-created on first add** — no separate "create cart" API needed. `getOrCreateCart()` handles it internally.
+
+**Duplicate book → quantity increase** — adding the same book twice doesn't create a duplicate row. `findByCartAndBook()` checks first.
+
+**JWT-based ownership** — cart owner is read from the JWT token via `SecurityContextHolder`. No userId in URL.
+
+**Security check on update/remove** — the service verifies the cart item belongs to the currently logged-in user before allowing modification.
+
+**Auto-clear on order** — `OrderService.createOrder()` calls `cartService.clearCart()` after saving the order.
+
+---
 
 ## How to Test
 
-### Forgot Password
-```
-Step 1 → POST /auth/forgot-password { "email": "vikash@gmail.com" }
-Step 2 → Check Gmail inbox for OTP
-Step 3 → POST /auth/reset-password { email, otp, newPassword }
-Step 4 → POST /auth/login with new password → get JWT token
-```
+Import `UC12-Cart-Postman-Collection.json` into Postman.
 
-### Update Password
-```
-Step 1 → POST /auth/login → get JWT token
-Step 2 → POST /auth/update-password
-         Authorization: Bearer <token>
-         { "currentPassword": "...", "newPassword": "..." }
-```
+Run in this order:
+1. Login → copy token → set as `{{token}}` in Postman environment
+2. Add to Cart
+3. View Cart
+4. Update Cart Item
+5. Remove Cart Item
+6. Clear Cart
 
-## Previous UC
-UC10 — Pagination + Swagger + CORS
-
-## Next
-React Frontend
+---
