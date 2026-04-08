@@ -27,18 +27,16 @@ import com.bookstore.repository.OrderRepository;
 import com.bookstore.repository.UserRepository;
 
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 
 @Service
+@RequiredArgsConstructor
 public class OrderService {
 
-	@Autowired
-	private BookRepository bookRepository;
-	
-	@Autowired
-	private UserRepository userRepository;
-	
-	@Autowired
-	private OrderRepository orderRepository;
+	private final BookRepository bookRepository;
+	private final UserRepository userRepository;
+	private final OrderRepository orderRepository;
+	private final CartService cartService;
 	
 	//helper method that convert entity to dto
 	private OrderResponse toResponse(Order order) {
@@ -114,6 +112,8 @@ public class OrderService {
 		// 4. Set total and save
 		order.setTotalAmount(total);
         Order saved = orderRepository.save(order);
+        cartService.clearCart(); // UC12 — clear cart after order is placed
+       
         return toResponse(saved);
 	}
 	

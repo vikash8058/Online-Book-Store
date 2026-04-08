@@ -99,4 +99,15 @@ public class GlobalExceptionHandler {
                 .build();
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
+
+
+    @ExceptionHandler(CartItemNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCartItemNotFound(CartItemNotFoundException ex) {
+        ErrorResponse error = ErrorResponse.builder()
+        		.message(ex.getMessage())
+        		.statusCode(HttpStatus.NOT_FOUND.value())
+        		.timestamp(LocalDateTime.now())
+        		.build();
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
 }

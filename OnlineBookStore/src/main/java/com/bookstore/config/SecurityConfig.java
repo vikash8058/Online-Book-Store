@@ -101,6 +101,8 @@ public class SecurityConfig {
 						// CUSTOMER only
 						.requestMatchers("/api/orders/create/**").hasRole("CUSTOMER")
 						
+						// Cart — CUSTOMER only
+						.requestMatchers("/api/cart/**").hasRole("CUSTOMER")
 
 						
 						.anyRequest().authenticated())
