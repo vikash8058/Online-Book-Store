@@ -37,4 +37,26 @@ public class Order {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
+    
+    @Column(nullable = true)
+    private String deliveryFullName;
+
+    @Column(nullable = true)
+    private String deliveryPhone;
+
+    @Column(nullable = true)
+    private String deliveryAddressLine;
+
+    @Column(nullable = true)
+    private String deliveryCity;
+
+    @Column(nullable = true)
+    private String deliveryState;
+
+    @Column(nullable = true)
+    private String deliveryPincode;
+
+    // Payment linked to this order
+    @OneToOne(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private Payment payment;
 }

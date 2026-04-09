@@ -44,28 +44,45 @@ public class OrderService {
 	private final CartRepository cartRepository;
 	
 	//helper method that convert entity to dto
-	private OrderResponse toResponse(Order order) {
-		List<OrderItemResponse> itemsResponse=order.getOrderItems()
-				.stream()
-				.map(item->OrderItemResponse.builder()
-						.id(item.getId())
-						.bookId(item.getBook().getId())
-						.bookTitle(item.getBook().getTitle())
-						.price(item.getPrice())
-						.quantity(item.getQuantity())
-						.build()
-						)
-			.toList();
-		
-		return OrderResponse.builder()
-				.id(order.getId())
-				.orderDate(order.getOrderDate())
-				.totalAmount(order.getTotalAmount())
-				.status(order.getStatus())
-				.userId(order.getUser().getId())
-				.items(itemsResponse)
-				.build();
-				
+	// Change toResponse() from private to public
+	public OrderResponse toResponse(Order order) {
+	    List<OrderItemResponse> itemsResponse = order.getOrderItems()
+	            .stream()
+	            .map(item -> OrderItemResponse.builder()
+	                    .id(item.getId())
+	                    .bookId(item.getBook().getId())
+	                    .bookTitle(item.getBook().getTitle())
+	                    .price(item.getPrice())
+	                    .quantity(item.getQuantity())
+	                    .build())
+	            .toList();
+
+	    // Payment info — may be null for old orders
+	    String paymentMode = null;
+	    String paymentStatus = null;
+	    if (order.getPayment() != null) {
+	        paymentMode = order.getPayment().getPaymentMode().name();
+	        paymentStatus = order.getPayment().getStatus().name();
+	    }
+
+	    return OrderResponse.builder()
+	            .id(order.getId())
+	            .orderDate(order.getOrderDate())
+	            .totalAmount(order.getTotalAmount())
+	            .status(order.getStatus())
+	            .userId(order.getUser().getId())
+	            .items(itemsResponse)
+	            // Address snapshot
+	            .deliveryFullName(order.getDeliveryFullName())
+	            .deliveryPhone(order.getDeliveryPhone())
+	            .deliveryAddressLine(order.getDeliveryAddressLine())
+	            .deliveryCity(order.getDeliveryCity())
+	            .deliveryState(order.getDeliveryState())
+	            .deliveryPincode(order.getDeliveryPincode())
+	            // Payment
+	            .paymentMode(paymentMode)
+	            .paymentStatus(paymentStatus)
+	            .build();
 	}
 	
 	//method to create order

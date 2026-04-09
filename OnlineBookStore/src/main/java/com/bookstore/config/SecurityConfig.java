@@ -100,6 +100,9 @@ public class SecurityConfig {
 						.requestMatchers("/api/cart/**").hasRole("CUSTOMER")
 						.requestMatchers("/api/orders/my-orders").hasRole("CUSTOMER")
 						.requestMatchers("/api/orders/cancel/**").hasRole("CUSTOMER")
+						.requestMatchers("/api/address/**").hasRole("CUSTOMER")
+						.requestMatchers("/api/payment/**").hasRole("CUSTOMER")
+						.requestMatchers("/api/orders/*/invoice").hasRole("CUSTOMER")
 
 						
 						.anyRequest().authenticated())
