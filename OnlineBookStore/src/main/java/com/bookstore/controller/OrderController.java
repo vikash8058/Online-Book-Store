@@ -27,11 +27,16 @@ public class OrderController {
 	
 	@Autowired
 	private OrderService orderService;
-	
-	@PostMapping("/create/{userId}")
-	public ResponseEntity<OrderResponse> createOrder(@PathVariable Long userId, @Valid @RequestBody OrderRequest request){
-		return ResponseEntity.status(HttpStatus.CREATED)
-				.body(orderService.createOrder(userId, request));
+
+	/*
+	 * POST /api/orders/place
+	 * Place order from cart — no request body needed.
+	 * Cart items are read from JWT token.
+	 */
+	@PostMapping("/place")
+	public ResponseEntity<OrderResponse> placeOrder() {
+	    return ResponseEntity.status(HttpStatus.CREATED)
+	            .body(orderService.placeOrderFromCart());
 	}
 	
 	@GetMapping("/get")
@@ -58,9 +63,19 @@ public class OrderController {
 		return ResponseEntity.ok(orderService.updateOrderStatus(id, request));
 	}
 
-	// get all orders of a user
-	@GetMapping("/user/{userId}")
-	public ResponseEntity<List<OrderResponse>> getOrdersByUser(@PathVariable Long userId) {
-	    return ResponseEntity.ok(orderService.getOrdersByUser(userId));
+	// Customer sees only their own orders — no userId in URL
+	@GetMapping("/my-orders")
+	public ResponseEntity<List<OrderResponse>> getMyOrders() {
+	    return ResponseEntity.ok(orderService.getOrdersByUser());
+	}
+	
+	/*
+	 * POST /api/orders/cancel/{orderId}
+	 * Customer cancels their own order.
+	 * Only works if order is PENDING.
+	 */
+	@PostMapping("/cancel/{orderId}")
+	public ResponseEntity<OrderResponse> cancelOrder(@PathVariable Long orderId) {
+	    return ResponseEntity.ok(orderService.cancelOrder(orderId));
 	}
 }

@@ -2,6 +2,7 @@ package com.bookstore.controller;
 
 import com.bookstore.dto.request.UserUpdateRequest;
 import com.bookstore.dto.response.UserResponse;
+import com.bookstore.model.User;
 import com.bookstore.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -45,9 +46,23 @@ public class UserController {
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
     
- // Get current user profile (for authenticated users)
+    // Get current user profile (for authenticated users)
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getCurrentUser() {
         return ResponseEntity.ok(userService.getCurrentUser());
+    }
+    
+    //get users by name
+    @GetMapping("/search")  // Admin only
+    public ResponseEntity<List<UserResponse>> getUserByName(@RequestParam String name){
+    	return ResponseEntity.ok(userService.searchUserByName(name));
+    }
+    
+    //get user by auth provider
+    @GetMapping("/filter") //Admin only
+    public ResponseEntity<List<UserResponse>> getUsersByProvider(
+            @RequestParam String provider) {
+
+        return ResponseEntity.ok(userService.searchUserByProvider(provider));
     }
 }

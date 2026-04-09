@@ -76,33 +76,30 @@ public class SecurityConfig {
 						.requestMatchers("/oauth2/**").permitAll()
 						.requestMatchers("/login/oauth2/**").permitAll()
 						
-						
-						.requestMatchers("/api/orders/user/**").hasRole("CUSTOMER")
 						// ADMIN + CUSTOMER
-						.requestMatchers("/api/users/**").hasAnyRole("CUSTOMER","ADMIN")
+						.requestMatchers("/api/users/me").hasAnyRole("ADMIN","CUSTOMER")
 						.requestMatchers("/api/books/get/**").hasAnyRole("ADMIN", "CUSTOMER")
 						.requestMatchers("/api/books/search").hasAnyRole("ADMIN", "CUSTOMER")
 						.requestMatchers("/api/books/author").hasAnyRole("ADMIN", "CUSTOMER")
-						.requestMatchers("/api/orders/get/**").hasAnyRole("ADMIN", "CUSTOMER")
-						.requestMatchers("/api/orders/user/**").hasAnyRole("ADMIN", "CUSTOMER")
 						.requestMatchers("/api/books/paged").hasAnyRole("ADMIN", "CUSTOMER")
-						.requestMatchers("/api/users/me").hasAnyRole("CUSTOMER","ADMIN")
 						.requestMatchers("/api/users/me").hasAnyRole("CUSTOMER","ADMIN")
 						
 						// ADMIN only endpoints
+						.requestMatchers("/api/users/**").hasRole("ADMIN")
 						.requestMatchers("/api/books/create").hasRole("ADMIN")
 						.requestMatchers("/api/books/update/**").hasRole("ADMIN")
 						.requestMatchers("/api/books/partialUpdate/**").hasRole("ADMIN")
 						.requestMatchers("/api/books/delete/**").hasRole("ADMIN")
-						.requestMatchers("/api/orders/get").hasRole("ADMIN")
+						.requestMatchers("/api/orders/get/**").hasRole("ADMIN")
 						.requestMatchers("/api/orders/delete/**").hasRole("ADMIN")
 						.requestMatchers("/api/orders/status/**").hasRole("ADMIN")
 
 						// CUSTOMER only
 						.requestMatchers("/api/orders/create/**").hasRole("CUSTOMER")
-						
-						// Cart — CUSTOMER only
+						.requestMatchers("/api/orders/place").hasRole("CUSTOMER")
 						.requestMatchers("/api/cart/**").hasRole("CUSTOMER")
+						.requestMatchers("/api/orders/my-orders").hasRole("CUSTOMER")
+						.requestMatchers("/api/orders/cancel/**").hasRole("CUSTOMER")
 
 						
 						.anyRequest().authenticated())

@@ -1,4 +1,5 @@
 package com.bookstore.dto.response;
+import com.bookstore.model.AuthProvider;
 
 import com.bookstore.model.Role;
 import lombok.*;
@@ -13,4 +14,5 @@ public class UserResponse {
 	private String name;
 	private String email;
 	private Role role;
+	private AuthProvider authProvider;
 }

@@ -6,14 +6,17 @@ import com.bookstore.dto.response.CartItemResponse;
 import com.bookstore.dto.response.CartResponse;
 import com.bookstore.exception.BookNotFoundException;
 import com.bookstore.exception.CartItemNotFoundException;
+import com.bookstore.exception.InsufficientStockException;
 import com.bookstore.model.*;
 import com.bookstore.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -79,6 +82,7 @@ public class CartService {
     // If new book → add as new CartItem
     @Transactional
     public CartResponse addToCart(AddToCartRequest request) {
+
         User user = getCurrentUser();
         Cart cart = getOrCreateCart(user);
 
@@ -86,28 +90,41 @@ public class CartService {
                 .orElseThrow(() -> new BookNotFoundException(
                         "Book not found with id: " + request.getBookId()));
 
-        // Check if this book already exists in cart
-        cartItemRepository.findByCartAndBook(cart, book)
-                .ifPresentOrElse(
-                        existingItem -> {
-                            // Book already in cart → just add quantity
-                            existingItem.setQuantity(
-                                    existingItem.getQuantity() + request.getQuantity());
-                            cartItemRepository.save(existingItem);
-                        },
-                        () -> {
-                            // New book → create new CartItem
-                            CartItem newItem = CartItem.builder()
-                                    .cart(cart)
-                                    .book(book)
-                                    .quantity(request.getQuantity())
-                                    .build();
-                            cart.getItems().add(newItem);
-                            cartItemRepository.save(newItem);
-                        }
-                );
+        Optional<CartItem> optionalItem =
+                cartItemRepository.findByCartAndBook(cart, book);
 
-        // Re-fetch fresh cart after save
+        int alreadyInCart = optionalItem
+                .map(CartItem::getQuantity)
+                .orElse(0);
+
+        int totalRequested = alreadyInCart + request.getQuantity();
+
+        // Step 1: Validate first
+        if (totalRequested > book.getStock()) {
+            throw new InsufficientStockException(
+                    "Cannot add " + request.getQuantity() +
+                    ". Available: " + book.getStock() +
+                    ", Already in cart: " + alreadyInCart
+            );
+        }
+
+        // Step 2: Then update
+        if (optionalItem.isPresent()) {
+            CartItem existingItem = optionalItem.get();
+            existingItem.setQuantity(totalRequested);
+            cartItemRepository.save(existingItem);
+        } else {
+            CartItem newItem = CartItem.builder()
+                    .cart(cart)
+                    .book(book)
+                    .quantity(request.getQuantity())
+                    .build();
+
+            cart.getItems().add(newItem);
+            cartItemRepository.save(newItem);
+        }
+
+        // Step 3: Return updated cart
         Cart updatedCart = cartRepository.findByUser(user).orElseThrow();
         return toCartResponse(updatedCart);
     }
@@ -130,9 +147,18 @@ public class CartService {
 
         // Security check: make sure this item belongs to the current user's cart
         if (!item.getCart().getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("Access denied: this cart item does not belong to you");
+            throw new UsernameNotFoundException("Access denied: this cart item does not belong to you");
         }
 
+        // After fetching the item, before saving:
+        Book book = item.getBook();
+        if (request.getQuantity() > book.getStock()) {
+            throw new InsufficientStockException(
+                    "Cannot set quantity to " + request.getQuantity() +
+                    ". Available stock: " + book.getStock()
+            );
+        }
+        
         item.setQuantity(request.getQuantity());
         cartItemRepository.save(item);
 

@@ -3,10 +3,12 @@ package com.bookstore.service;
 import com.bookstore.dto.request.UserUpdateRequest;
 import com.bookstore.dto.response.UserResponse;
 import com.bookstore.exception.UserNotFoundException;
+import com.bookstore.model.AuthProvider;
 import com.bookstore.model.User;
 import com.bookstore.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,7 @@ public class UserService {
                 .name(user.getName())
                 .email(user.getEmail())
                 .role(user.getRole())
+                .authProvider(user.getAuthProvider())
                 .build();
     }
 
@@ -49,7 +52,14 @@ public class UserService {
         if (!userRepository.existsById(id)) {
             throw new UserNotFoundException(id);
         }
-        userRepository.deleteById(id);
+        try {
+            userRepository.deleteById(id);
+        } catch (DataIntegrityViolationException e) {
+            // User has orders in DB — cannot delete due to FK constraint
+            throw new RuntimeException(
+                "Cannot delete this user. They have existing orders in the system."
+            );
+        }
     }
 
     // Update user
@@ -79,5 +89,31 @@ public class UserService {
             .orElseThrow(() -> new UserNotFoundException("User not found"));
         
         return toResponse(user);
+    }
+    
+    //search user by name
+    public List<UserResponse> searchUserByName(String name){
+    	List<User> users=userRepository.findByNameContainingIgnoreCase(name);
+    	return users.stream()
+    			.map(this::toResponse)
+    			.toList();
+    }
+    
+    //method to search user by auth provider
+    public List<UserResponse> searchUserByProvider(String provider) {
+
+        AuthProvider authProvider;
+
+        try {
+            authProvider = AuthProvider.valueOf(provider.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Invalid provider value: " + provider);
+        }
+
+        List<User> users=userRepository.findByAuthProvider(authProvider);
+        return users.stream()
+        		.map(this::toResponse)
+        		.toList();
+        		
     }
 }
