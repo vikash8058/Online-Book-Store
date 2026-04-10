@@ -66,6 +66,10 @@ public class SecurityConfig {
 						.requestMatchers("/v3/api-docs/**").permitAll()
 						.requestMatchers("/auth/forgot-password").permitAll()
 						.requestMatchers("/auth/reset-password").permitAll()
+						.requestMatchers("/api/books/paged").permitAll()
+						.requestMatchers("/api/books/get/**").permitAll()
+						.requestMatchers("/api/books/search").permitAll()
+						.requestMatchers("/api/books/author").permitAll()
 						// /auth/update-password is NOT here — needs JWT token
 
 						/*
@@ -78,10 +82,10 @@ public class SecurityConfig {
 						
 						// ADMIN + CUSTOMER
 						.requestMatchers("/api/users/me").hasAnyRole("ADMIN","CUSTOMER")
-						.requestMatchers("/api/books/get/**").hasAnyRole("ADMIN", "CUSTOMER")
-						.requestMatchers("/api/books/search").hasAnyRole("ADMIN", "CUSTOMER")
-						.requestMatchers("/api/books/author").hasAnyRole("ADMIN", "CUSTOMER")
-						.requestMatchers("/api/books/paged").hasAnyRole("ADMIN", "CUSTOMER")
+//						.requestMatchers("/api/books/get/**").hasAnyRole("ADMIN", "CUSTOMER")
+//						.requestMatchers("/api/books/search").hasAnyRole("ADMIN", "CUSTOMER")
+//						.requestMatchers("/api/books/author").hasAnyRole("ADMIN", "CUSTOMER")
+//						.requestMatchers("/api/books/paged").hasAnyRole("ADMIN", "CUSTOMER")
 						.requestMatchers("/api/users/me").hasAnyRole("CUSTOMER","ADMIN")
 						
 						// ADMIN only endpoints
