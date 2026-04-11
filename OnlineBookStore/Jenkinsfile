@@ -4,7 +4,7 @@ pipeline {
     environment {
         DOCKERHUB_USERNAME = 'vikash8058'
         IMAGE_NAME = 'bookstore-backend'
-        EC2_IP = '54.147.131.66'
+        EC2_IP = '44.220.161.17'
     }
 
     stages {
