@@ -178,8 +178,8 @@ public class SecurityConfig {
 	CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration configuration = new CorsConfiguration();
 
-		configuration.setAllowedOrigins(List.of("http://localhost:3000", // React dev server
-				"http://localhost:5173" // Vite dev server
+		configuration.setAllowedOrigins(List.of("http://54.226.175.107:3000", // React dev server
+				"http://54.226.175.107:5173" // Vite dev server
 		));
 
 		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
