@@ -41,18 +41,16 @@ pipeline {
             }
         }
         stage('Deploy to EC2') {
-            steps {
-                echo 'Deploying to EC2...'
-                sshagent(['ec2-ssh-key']) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP \
-                        "cd ~/bookstore && \
-                        docker pull vikash8058/bookstore-backend:latest && \
-                        docker-compose up -d backend"
-                    '''
-                }
-            }
-        }
+    		steps {
+       			 sh '''
+        		 ssh -i /var/jenkins_home/bookstore-key.pem \
+        		 -o StrictHostKeyChecking=no ubuntu@54.226.175.107 \
+        		 "cd ~/bookstore && \
+        	 	 docker pull vikash8058/bookstore-backend:latest && \
+        		 docker compose up -d backend || docker-compose up -d backend"
+       			 '''
+    		}
+	}
     }
     post {
         success { echo '✅ Backend deployed successfully!' }
