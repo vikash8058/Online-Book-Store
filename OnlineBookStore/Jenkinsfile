@@ -1,36 +1,32 @@
 pipeline {
     agent any
-
     environment {
         DOCKERHUB_USERNAME = 'vikash8058'
         IMAGE_NAME = 'bookstore-backend'
         EC2_IP = '54.226.175.107'
     }
-
     stages {
-
         stage('Checkout') {
             steps {
                 echo 'Pulling code from GitHub...'
                 checkout scm
             }
         }
-
         stage('Build JAR') {
             steps {
                 echo 'Building JAR...'
-                sh 'chmod +x mvnw'
-                sh './mvnw clean package -DskipTests'
+                dir('OnlineBookStore') {
+                    sh 'chmod +x mvnw'
+                    sh './mvnw clean package -DskipTests'
+                }
             }
         }
-
         stage('Build Docker Image') {
             steps {
                 echo 'Building Docker image...'
-                sh 'docker build -t vikash8058/$IMAGE_NAME:latest .'
+                sh 'docker build -t vikash8058/$IMAGE_NAME:latest ./OnlineBookStore/'
             }
         }
-
         stage('Push to DockerHub') {
             steps {
                 echo 'Pushing to DockerHub...'
@@ -44,7 +40,6 @@ pipeline {
                 }
             }
         }
-
         stage('Deploy to EC2') {
             steps {
                 echo 'Deploying to EC2...'
@@ -59,7 +54,6 @@ pipeline {
             }
         }
     }
-
     post {
         success { echo '✅ Backend deployed successfully!' }
         failure { echo '❌ Pipeline failed!' }
